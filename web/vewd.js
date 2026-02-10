@@ -183,6 +183,7 @@ function createVewdWidget(node) {
         item.className = "vewd-item";
         item.innerHTML = `<img src="${src}">`;
         item.onclick = (e) => handleClick(i, e);
+        item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
         grid.appendChild(item);
         state.images.push({ src, filename, el: item });
 
