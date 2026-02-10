@@ -80,7 +80,7 @@ class Vewd:
                 custom_path = Path(folder) / filename
                 pil_image.save(custom_path, format='PNG')
 
-        return {"ui": {"images": results}, "result": (images,)}
+        return {"ui": {"vewd_images": results}, "result": (images,)}
 
 
 NODE_CLASS_MAPPINGS = {

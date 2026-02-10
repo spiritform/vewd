@@ -260,8 +260,8 @@ app.registerExtension({
         const orig = node.onExecuted;
         node.onExecuted = function(output) {
             if (orig) orig.call(this, output);
-            if (output?.images) {
-                output.images.forEach(img => {
+            if (output?.vewd_images) {
+                output.vewd_images.forEach(img => {
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
                     widget.addImage(src, img.filename);
                 });
