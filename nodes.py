@@ -42,8 +42,25 @@ class Vewd:
     FUNCTION = "process"
     CATEGORY = "image"
     OUTPUT_NODE = True
+    INPUT_IS_LIST = True
 
-    def process(self, images, folder="", filename_prefix="vewd", save_to_folder=True, prompt=None, extra_pnginfo=None):
+    def process(self, images, folder=[""], filename_prefix=["vewd"], save_to_folder=[True], prompt=None, extra_pnginfo=None):
+        # Handle list inputs (take first value for non-image params)
+        folder = folder[0] if isinstance(folder, list) else folder
+        filename_prefix = filename_prefix[0] if isinstance(filename_prefix, list) else filename_prefix
+        save_to_folder = save_to_folder[0] if isinstance(save_to_folder, list) else save_to_folder
+
+        # Combine all image batches
+        import torch
+        all_images = []
+        for img_batch in images:
+            if img_batch is not None:
+                all_images.append(img_batch)
+
+        if not all_images:
+            return {"ui": {"vewd_images": []}, "result": ([],)}
+
+        combined_images = torch.cat(all_images, dim=0)
         results = []
         timestamp = int(time.time() * 1000)
 
@@ -55,7 +72,7 @@ class Vewd:
             save_dir = Path(folder)
             save_dir.mkdir(parents=True, exist_ok=True)
 
-        for i, image in enumerate(images):
+        for i, image in enumerate(combined_images):
             # Convert tensor to numpy array
             img_array = image.cpu().numpy()
             img_array = (img_array * 255).clip(0, 255).astype(np.uint8)
@@ -83,7 +100,7 @@ class Vewd:
                 custom_path = Path(folder) / filename
                 pil_image.save(custom_path, format='PNG')
 
-        return {"ui": {"vewd_images": results}, "result": (images,)}
+        return {"ui": {"vewd_images": results}, "result": ([combined_images],)}
 
 
 # Export API route
