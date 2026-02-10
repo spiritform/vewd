@@ -69,12 +69,20 @@ style.textContent = `
         flex: 1;
         background: #0a0a0a;
         display: flex;
+        min-width: 0;
+    }
+    .vewd-preview-area.single { justify-content: center; }
+    .vewd-preview-area.single .vewd-pane:nth-child(2) { display: none; }
+
+    .vewd-pane {
+        flex: 1;
+        display: flex;
         align-items: center;
         justify-content: center;
         padding: 10px;
-        min-width: 0;
     }
-    .vewd-preview-area img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .vewd-pane + .vewd-pane { border-left: 1px solid #222; }
+    .vewd-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
     .vewd-bar {
         display: flex;
@@ -153,7 +161,10 @@ function createVewdWidget(node) {
     el.innerHTML = `
         <div class="vewd-main">
             <div class="vewd-grid-area"><div class="vewd-grid"></div></div>
-            <div class="vewd-preview-area"></div>
+            <div class="vewd-preview-area single">
+                <div class="vewd-pane"></div>
+                <div class="vewd-pane"></div>
+            </div>
         </div>
         <div class="vewd-bar">
             <button class="fullscreen-btn">⛶</button>
@@ -233,12 +244,22 @@ function createVewdWidget(node) {
             img.el.classList.toggle("hidden", state.filterOn && !state.tagged.has(i));
         });
 
-        // Single preview
+        // Preview - single or compare
         const sel = [...state.selected].sort((a, b) => a - b);
-        if (sel.length >= 1) {
-            previewArea.innerHTML = `<img src="${state.images[sel[0]].src}">`;
+        const panes = previewArea.querySelectorAll(".vewd-pane");
+
+        if (sel.length >= 2) {
+            previewArea.classList.remove("single");
+            panes[0].innerHTML = `<img src="${state.images[sel[0]].src}">`;
+            panes[1].innerHTML = `<img src="${state.images[sel[1]].src}">`;
+        } else if (sel.length === 1) {
+            previewArea.classList.add("single");
+            panes[0].innerHTML = `<img src="${state.images[sel[0]].src}">`;
+            panes[1].innerHTML = "";
         } else {
-            previewArea.innerHTML = "";
+            previewArea.classList.add("single");
+            panes[0].innerHTML = "";
+            panes[1].innerHTML = "";
         }
 
         countEl.textContent = state.images.length;
