@@ -95,8 +95,9 @@ style.textContent = `
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
     .vewd-bar button.on { background: #4a9eff; color: #fff; }
-    .vewd-bar .export-btn { background: #2a5a2a; color: #8f8; }
-    .vewd-bar .export-btn:hover { background: #3a6a3a; }
+    .vewd-bar .export-btn { background: #1a1a1a; color: #333; pointer-events: none; }
+    .vewd-bar .export-btn.active { background: #eee; color: #222; pointer-events: auto; }
+    .vewd-bar .export-btn.active:hover { background: #fff; }
 
     /* Fullscreen overlay */
     .vewd-fullscreen {
@@ -224,6 +225,7 @@ function createVewdWidget(node) {
         countEl.textContent = state.images.length;
         taggedCountEl.textContent = `${state.tagged.size} tagged`;
         filterBtn.classList.toggle("on", state.filterOn);
+        exportBtn.classList.toggle("active", state.tagged.size > 0);
     }
 
     function navigate(d) {
