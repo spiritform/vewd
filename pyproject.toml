@@ -1,0 +1,13 @@
+[project]
+name = "vewd"
+description = "A media viewer node for ComfyUI. Auto-captures all generated media into a grid for easy viewing, sorting, and comparing."
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/spiritform/vewd"
+
+[tool.comfy]
+PublisherId = "spiritform"
+DisplayName = "Vewd"
