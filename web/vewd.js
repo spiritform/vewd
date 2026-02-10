@@ -227,8 +227,11 @@ function createVewdWidget(node) {
         countEl.textContent = state.images.length;
         taggedCountEl.textContent = `${state.tagged.size} tagged`;
         filterBtn.classList.toggle("on", state.filterOn);
-        exportBtn.classList.toggle("active", state.tagged.size > 0);
-        exportBtn.textContent = state.tagged.size > 0 ? `Export (${state.tagged.size})` : "Export Selects";
+
+        // Export button - uses tagged if any, otherwise selected
+        const exportCount = state.tagged.size > 0 ? state.tagged.size : state.selected.size;
+        exportBtn.classList.toggle("active", exportCount > 0);
+        exportBtn.textContent = exportCount > 0 ? `Export (${exportCount})` : "Export";
     }
 
     function navigate(d) {
@@ -271,9 +274,13 @@ function createVewdWidget(node) {
     }
 
     async function exportSelects() {
-        const tagged = state.images.filter((_, i) => state.tagged.has(i));
-        if (tagged.length === 0) {
-            alert("No tagged images to export");
+        // Use tagged if any, otherwise use selected
+        const toExport = state.tagged.size > 0
+            ? state.images.filter((_, i) => state.tagged.has(i))
+            : state.images.filter((_, i) => state.selected.has(i));
+
+        if (toExport.length === 0) {
+            alert("No images to export");
             return;
         }
 
@@ -290,7 +297,7 @@ function createVewdWidget(node) {
                 body: JSON.stringify({
                     folder: folder,
                     prefix: prefix,
-                    images: tagged.map(img => img.filename)
+                    images: toExport.map(img => img.filename)
                 })
             });
             const data = await res.json();
