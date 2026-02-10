@@ -51,19 +51,13 @@ style.textContent = `
     .vewd-item:hover { border-color: #666; }
     .vewd-item.selected { border-color: #fff; }
     .vewd-item.tagged::after {
-        content: "v";
+        content: "❤";
         position: absolute;
-        top: 2px;
-        right: 2px;
-        background: #4a9eff;
-        color: #fff;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        font-size: 9px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        top: 3px;
+        right: 4px;
+        color: #ff4a6a;
+        font-size: 14px;
+        text-shadow: 0 0 2px rgba(0,0,0,0.8);
     }
     .vewd-item.hidden { display: none; }
     .vewd-item img, .vewd-item video { width: 100%; height: 100%; object-fit: contain; }
@@ -76,6 +70,20 @@ style.textContent = `
         font-size: 24px;
         color: #444;
         background: #1a1a1a;
+    }
+    .vewd-item .media-icon {
+        position: absolute;
+        bottom: 4px;
+        left: 4px;
+        background: rgba(0,0,0,0.7);
+        color: #fff;
+        width: 18px;
+        height: 18px;
+        border-radius: 3px;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .vewd-preview-area {
@@ -96,15 +104,33 @@ style.textContent = `
     }
     .vewd-pane + .vewd-pane { border-left: 1px solid #222; }
     .vewd-pane img, .vewd-pane video { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .vewd-pane audio { width: 80%; }
     .vewd-pane .audio-preview {
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 20px;
         color: #666;
+        width: 100%;
     }
     .vewd-pane .audio-preview .icon { font-size: 64px; }
+    .vewd-pane .audio-preview audio { width: 80%; height: 40px; }
+
+    .vewd-filters {
+        display: flex;
+        gap: 4px;
+        margin-left: 8px;
+    }
+    .vewd-filters button {
+        background: transparent;
+        border: 1px solid #333;
+        color: #555;
+        padding: 2px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 9px;
+    }
+    .vewd-filters button:hover { border-color: #555; color: #888; }
+    .vewd-filters button.active { border-color: #4a9eff; color: #4a9eff; }
 
     .vewd-bar {
         display: flex;
@@ -125,7 +151,7 @@ style.textContent = `
         font-size: 10px;
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
-    .vewd-bar button.on { background: #4a9eff; color: #fff; }
+    .vewd-bar button.on { background: #ff4a6a; color: #fff; }
     .vewd-bar .export-btn { background: #1a1a1a; color: #333; pointer-events: none; }
     .vewd-bar .export-btn.active { background: #eee; color: #222; pointer-events: auto; }
     .vewd-bar .export-btn.active:hover { background: #fff; }
@@ -174,7 +200,8 @@ function createVewdWidget(node) {
         focusIndex: -1,
         selected: new Set(),
         tagged: new Set(),
-        filterOn: false
+        filterOn: false,
+        typeFilter: "all"
     };
 
     const el = document.createElement("div");
@@ -192,10 +219,16 @@ function createVewdWidget(node) {
             <button class="fullscreen-btn">⛶</button>
             <span class="count">0</span>
             <span class="tagged-count">0 tagged</span>
-            <button class="filter-btn">Filter</button>
+            <div class="vewd-filters">
+                <button class="type-filter active" data-type="all">All</button>
+                <button class="type-filter" data-type="image">Img</button>
+                <button class="type-filter" data-type="video">Vid</button>
+                <button class="type-filter" data-type="audio">Aud</button>
+            </div>
+            <button class="filter-btn">❤</button>
             <button class="clear-btn">Clear</button>
             <button class="export-btn">Export Selects</button>
-            <span style="margin-left:auto;color:#444">Space: tag • Esc: exit fullscreen</span>
+            <span style="margin-left:auto;color:#444">Space: ❤ | Esc: exit</span>
         </div>
     `;
 
@@ -215,36 +248,25 @@ function createVewdWidget(node) {
         item.className = "vewd-item";
 
         if (type === "video") {
-            item.innerHTML = `<video src="${src}" muted loop></video>`;
-            // Play on hover
-            item.onmouseenter = () => item.querySelector("video")?.play();
-            item.onmouseleave = () => {
-                const v = item.querySelector("video");
-                if (v) { v.pause(); v.currentTime = 0; }
-            };
+            item.innerHTML = `<video src="${src}" muted preload="metadata"></video><div class="media-icon">▶</div>`;
+            // Seek to show thumbnail
+            const vid = item.querySelector("video");
+            vid.addEventListener("loadedmetadata", () => { vid.currentTime = 0.1; });
         } else if (type === "audio") {
             item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
-            item.onmouseenter = () => item.querySelector("audio")?.play();
-            item.onmouseleave = () => {
-                const a = item.querySelector("audio");
-                if (a) { a.pause(); a.currentTime = 0; }
-            };
         } else {
             item.innerHTML = `<img src="${src}">`;
         }
 
         item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
 
-        // Add to beginning
         grid.insertBefore(item, grid.firstChild);
         state.images.unshift({ src, filename, type, el: item });
 
-        // Update click handlers with correct indices
         state.images.forEach((img, idx) => {
             img.el.onclick = (e) => handleClick(idx, e);
         });
 
-        // Shift tagged/selected indices
         const newTagged = new Set();
         state.tagged.forEach(i => newTagged.add(i + 1));
         state.tagged = newTagged;
@@ -255,7 +277,6 @@ function createVewdWidget(node) {
 
         if (state.focusIndex >= 0) state.focusIndex++;
 
-        // Select new item
         state.selected.clear();
         state.selected.add(0);
         state.focusIndex = 0;
@@ -263,7 +284,6 @@ function createVewdWidget(node) {
         update();
     }
 
-    // Backwards compat
     function addImage(src, filename) {
         addMedia(src, filename, "image");
     }
@@ -287,16 +307,22 @@ function createVewdWidget(node) {
         state.images.forEach((img, i) => {
             img.el.classList.toggle("selected", state.selected.has(i));
             img.el.classList.toggle("tagged", state.tagged.has(i));
-            img.el.classList.toggle("hidden", state.filterOn && !state.tagged.has(i));
+            const typeMatch = state.typeFilter === "all" || img.type === state.typeFilter;
+            const tagMatch = !state.filterOn || state.tagged.has(i);
+            img.el.classList.toggle("hidden", !typeMatch || !tagMatch);
         });
 
-        // Preview - single or compare
+        // Update type filter buttons
+        el.querySelectorAll(".type-filter").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.type === state.typeFilter);
+        });
+
         const sel = [...state.selected].sort((a, b) => a - b);
         const panes = previewArea.querySelectorAll(".vewd-pane");
 
         function renderPreview(media) {
             if (media.type === "video") {
-                return `<video src="${media.src}" controls autoplay muted loop></video>`;
+                return `<video src="${media.src}" controls muted loop></video>`;
             } else if (media.type === "audio") {
                 return `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
             }
@@ -318,10 +344,9 @@ function createVewdWidget(node) {
         }
 
         countEl.textContent = state.images.length;
-        taggedCountEl.textContent = `${state.tagged.size} tagged`;
+        taggedCountEl.textContent = `${state.tagged.size} ❤`;
         filterBtn.classList.toggle("on", state.filterOn);
 
-        // Export button - uses tagged if any, otherwise selected
         const exportCount = state.tagged.size > 0 ? state.tagged.size : state.selected.size;
         exportBtn.classList.toggle("active", exportCount > 0);
         exportBtn.textContent = exportCount > 0 ? `Export (${exportCount})` : "Export";
@@ -347,7 +372,6 @@ function createVewdWidget(node) {
             state.tagged.delete(i);
         });
 
-        // Reindex tagged
         const newTagged = new Set();
         state.tagged.forEach(t => {
             let offset = 0;
@@ -367,7 +391,6 @@ function createVewdWidget(node) {
     }
 
     async function exportSelects() {
-        // Use tagged if any, otherwise use selected
         const toExport = state.tagged.size > 0
             ? state.images.filter((_, i) => state.tagged.has(i))
             : state.images.filter((_, i) => state.selected.has(i));
@@ -377,7 +400,6 @@ function createVewdWidget(node) {
             return;
         }
 
-        // Get folder and prefix from node widgets
         const folderWidget = node.widgets?.find(w => w.name === "folder");
         const prefixWidget = node.widgets?.find(w => w.name === "filename_prefix");
         const folder = folderWidget?.value || "";
@@ -454,11 +476,13 @@ function createVewdWidget(node) {
         }
     };
 
-    // Stop clicks from selecting the node
     el.onclick = (e) => e.stopPropagation();
     el.onmousedown = (e) => e.stopPropagation();
 
     filterBtn.onclick = () => { state.filterOn = !state.filterOn; update(); };
+    el.querySelectorAll(".type-filter").forEach(btn => {
+        btn.onclick = () => { state.typeFilter = btn.dataset.type; update(); };
+    });
     clearBtn.onclick = () => {
         state.images.forEach(img => img.el.remove());
         state.images = [];
@@ -471,7 +495,7 @@ function createVewdWidget(node) {
     exportBtn.onclick = exportSelects;
     fullscreenBtn.onclick = toggleFullscreen;
 
-    return { el, addImage, state };
+    return { el, addImage, addMedia, state };
 }
 
 // Global widget reference
@@ -483,11 +507,9 @@ app.registerExtension({
     name: "vewd",
 
     async setup() {
-        // Hook into all node executions to capture images
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
-            // Debug: log all executed events
             console.log("[Vewd] executed event:", detail?.node, detail?.output);
 
             const output = detail?.output;
