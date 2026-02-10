@@ -11,6 +11,7 @@ style.textContent = `
         display: flex;
         flex-direction: column;
         height: 100%;
+        outline: none;
     }
 
     .vewd-main {
@@ -44,8 +45,8 @@ style.textContent = `
         cursor: pointer;
         position: relative;
     }
-    .vewd-item:hover { border-color: #333; }
-    .vewd-item.selected { border-color: #4a9eff; }
+    .vewd-item:hover { border-color: #444; }
+    .vewd-item.selected { border-color: #888; }
     .vewd-item.tagged::after {
         content: "v";
         position: absolute;
