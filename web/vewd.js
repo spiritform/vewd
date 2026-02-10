@@ -234,7 +234,7 @@ function createVewdWidget(node) {
             <button class="filter-btn">❤</button>
             <button class="clear-btn">Clear</button>
             <button class="export-btn">Export Selects</button>
-            <span style="margin-left:auto;color:#444">Space: ❤ | Esc: exit</span>
+            <span style="margin-left:auto;color:#444">spacebar ❤ | esc exit</span>
         </div>
     `;
 
