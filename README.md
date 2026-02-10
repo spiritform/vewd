@@ -1,22 +1,24 @@
 # Vewd
 
-A media viewer node for ComfyUI. Auto-captures all generated images into a grid for easy review, tagging, and export.
+A media viewer node for ComfyUI. Auto-captures all generated media into a grid for easy viewing, sorting, and comparing.
 
 ![Vewd Screenshot](screenshot.png)
 
 ## Why Vewd?
 
-**Reduce waste, save only what you want.** Instead of saving hundreds of images to your hard drive and sorting through them later, Vewd lets you review generations in real-time, tag the ones you like, and export only your selects.
+**Reduce waste, save only what you want.** Instead of saving hundreds of images to your hard drive and sorting through them later, Vewd lets you review generations in real-time, heart your favorites, and export only your selects.
 
 ## Features
 
-- **Auto-capture** - Automatically captures all images generated in your workflow
+- **Zero wiring** - No connections needed. Vewd automatically captures all media from your workflow
+- **All media types** - Images, videos, and audio
 - **Grid view** - See all generations in a thumbnail grid
-- **Preview** - Click to preview full size
-- **Tagging** - Space to tag your favorites
-- **Export selects** - Export tagged images with custom filename prefix
+- **Preview & compare** - Click to preview, select two to compare side-by-side
+- **Heart favorites** - Space to heart your favorites
+- **Media filters** - Filter by All, Images, Videos, or Audio
+- **Export selects** - Export hearted media with custom filename prefix
 - **Fullscreen** - Expand to fullscreen for better viewing
-- **Duplicate detection** - Only shows new images, skips cached results
+- **Non-destructive** - Delete only removes from viewer, not your files
 
 ## Installation
 
@@ -36,25 +38,25 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 ## Usage
 
 1. Add the **Vewd** node to your workflow (found in `image` category)
-2. Run your workflow - images automatically appear in the grid
-3. Click images to preview, Space to tag favorites
-4. Click **Export** to save tagged images
+2. Run your workflow - media automatically appears in the grid
+3. Click to preview, Ctrl+click or Shift+click to select multiple
+4. Space to heart favorites
+5. Click **Export** to save hearted media
 
-No wiring needed - it captures everything automatically.
+**No wiring needed** - Vewd captures everything automatically via remote connection to all nodes.
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
 | ← → ↑ ↓ | Navigate grid |
-| Space | Tag/untag image |
-| Delete | Remove from grid |
-| T | Toggle tagged filter |
+| Space | Heart/unheart |
+| Delete | Remove from viewer |
 | Esc | Exit fullscreen |
 
 ## Node Settings
 
-- **folder** - Where to export tagged images (creates `/selects` subfolder)
+- **folder** - Where to export hearted media (creates `/selects` subfolder)
 - **filename_prefix** - Prefix for exported files (e.g., `myproject_001.png`)
 
 ## License
