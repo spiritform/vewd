@@ -252,7 +252,7 @@ function createVewdWidget(node) {
     let isFullscreen = false;
     let originalParent = null;
 
-    function addMedia(src, filename, type = "image") {
+    function addMedia(src, filename, type = "image", sourceInfo = null) {
         const item = document.createElement("div");
         item.className = "vewd-item";
 
@@ -270,7 +270,7 @@ function createVewdWidget(node) {
         item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
 
         grid.insertBefore(item, grid.firstChild);
-        state.images.unshift({ src, filename, type, el: item });
+        state.images.unshift({ src, filename, type, el: item, sourceInfo });
 
         state.images.forEach((img, idx) => {
             img.el.onclick = (e) => handleClick(idx, e);
@@ -427,7 +427,11 @@ function createVewdWidget(node) {
                 body: JSON.stringify({
                     folder: folder,
                     prefix: prefix,
-                    images: toExport.map(img => img.filename)
+                    images: toExport.map(img => ({
+                        filename: img.filename,
+                        subfolder: img.sourceInfo?.subfolder || "",
+                        type: img.sourceInfo?.type || "temp"
+                    }))
                 })
             });
             const data = await res.json();
@@ -538,7 +542,7 @@ app.registerExtension({
                     seenImages.add(key);
 
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, img.filename, "image");
+                    globalVewdWidget.addMedia(src, img.filename, "image", { subfolder: img.subfolder || "", type: img.type || "temp" });
                 });
             }
 
@@ -550,7 +554,7 @@ app.registerExtension({
                     seenImages.add(key);
 
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(gif.filename)}&subfolder=${encodeURIComponent(gif.subfolder || "")}&type=${gif.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, gif.filename, "video");
+                    globalVewdWidget.addMedia(src, gif.filename, "video", { subfolder: gif.subfolder || "", type: gif.type || "temp" });
                 });
             }
 
@@ -562,7 +566,7 @@ app.registerExtension({
                     seenImages.add(key);
 
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(vid.filename)}&subfolder=${encodeURIComponent(vid.subfolder || "")}&type=${vid.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, vid.filename, "video");
+                    globalVewdWidget.addMedia(src, vid.filename, "video", { subfolder: vid.subfolder || "", type: vid.type || "temp" });
                 });
             }
 
@@ -576,7 +580,7 @@ app.registerExtension({
                     seenImages.add(key);
 
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(aud.filename)}&subfolder=${encodeURIComponent(aud.subfolder || "")}&type=${aud.type || "output"}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, aud.filename, "audio");
+                    globalVewdWidget.addMedia(src, aud.filename, "audio", { subfolder: aud.subfolder || "", type: aud.type || "output" });
                 });
             }
 

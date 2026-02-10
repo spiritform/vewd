@@ -51,11 +51,25 @@ async def export_selects(request):
         selects_dir.mkdir(parents=True, exist_ok=True)
 
         temp_dir = folder_paths.get_temp_directory()
+        output_dir = folder_paths.get_output_directory()
+        input_dir = folder_paths.get_input_directory()
         count = 0
 
-        for i, filename in enumerate(images):
-            # Try temp folder first, then the main folder
-            src_path = Path(temp_dir) / filename
+        for i, img_info in enumerate(images):
+            # Support both old format (string) and new format (object with source info)
+            if isinstance(img_info, str):
+                filename = img_info
+                subfolder = ""
+                source_type = "temp"
+            else:
+                filename = img_info.get("filename", "")
+                subfolder = img_info.get("subfolder", "")
+                source_type = img_info.get("type", "temp")
+
+            # Resolve source path based on type
+            type_dirs = {"temp": temp_dir, "output": output_dir, "input": input_dir}
+            base_dir = type_dirs.get(source_type, temp_dir)
+            src_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
             if not src_path.exists():
                 src_path = Path(folder) / filename
 
