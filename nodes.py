@@ -99,7 +99,8 @@ async def export_selects(request):
 
             if src_path.exists():
                 # New name with user's prefix
-                new_name = f"{prefix}_select{i + 1:02d}.png"
+                seed_part = f"_{seed}" if seed else ""
+                new_name = f"{prefix}_select{i + 1:02d}{seed_part}.png"
                 dst_path = selects_dir / new_name
                 copy_with_metadata(src_path, dst_path, seed)
                 count += 1
@@ -154,7 +155,8 @@ async def save_images(request):
                 src_path = Path(folder) / filename
 
             if src_path.exists():
-                new_name = f"{prefix}_{start_num + i:03d}.png"
+                seed_part = f"_{seed}" if seed else ""
+                new_name = f"{prefix}_{start_num + i:03d}{seed_part}.png"
                 dst_path = save_dir / new_name
                 copy_with_metadata(src_path, dst_path, seed)
                 count += 1
