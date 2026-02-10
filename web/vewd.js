@@ -155,12 +155,12 @@ function createVewdWidget(node) {
             <div class="vewd-preview-area"></div>
         </div>
         <div class="vewd-bar">
+            <button class="fullscreen-btn">⛶</button>
             <span class="count">0</span>
             <span class="tagged-count">0 tagged</span>
             <button class="filter-btn">Filter</button>
             <button class="clear-btn">Clear</button>
             <button class="export-btn">Export Selects</button>
-            <button class="fullscreen-btn">⛶</button>
             <span style="margin-left:auto;color:#444">Space: tag • Esc: exit fullscreen</span>
         </div>
     `;
