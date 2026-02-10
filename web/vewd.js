@@ -97,6 +97,41 @@ style.textContent = `
     .vewd-bar button.on { background: #4a9eff; color: #fff; }
     .vewd-bar .export-btn { background: #2a5a2a; color: #8f8; }
     .vewd-bar .export-btn:hover { background: #3a6a3a; }
+
+    /* Fullscreen overlay */
+    .vewd-fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #0a0a0a;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+    }
+    .vewd-fullscreen .vewd-main {
+        flex: 1;
+    }
+    .vewd-fullscreen .vewd-grid-area {
+        width: 25%;
+        padding: 12px;
+    }
+    .vewd-fullscreen .vewd-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+    .vewd-fullscreen .vewd-preview-area {
+        padding: 20px;
+    }
+    .vewd-fullscreen .vewd-bar {
+        padding: 10px 20px;
+        font-size: 12px;
+    }
+    .vewd-fullscreen .vewd-bar button {
+        padding: 5px 14px;
+        font-size: 12px;
+    }
 `;
 document.head.appendChild(style);
 
@@ -124,7 +159,8 @@ function createVewdWidget(node) {
             <button class="filter-btn">Filter</button>
             <button class="clear-btn">Clear</button>
             <button class="export-btn">Export Selects</button>
-            <span style="margin-left:auto;color:#444">Space: tag</span>
+            <button class="fullscreen-btn">⛶</button>
+            <span style="margin-left:auto;color:#444">Space: tag • Esc: exit fullscreen</span>
         </div>
     `;
 
@@ -135,6 +171,8 @@ function createVewdWidget(node) {
     const filterBtn = el.querySelector(".filter-btn");
     const clearBtn = el.querySelector(".clear-btn");
     const exportBtn = el.querySelector(".export-btn");
+    const fullscreenBtn = el.querySelector(".fullscreen-btn");
+    let isFullscreen = false;
 
     function addImage(src, filename) {
         const i = state.images.length;
@@ -228,12 +266,27 @@ function createVewdWidget(node) {
         }
     }
 
+    function toggleFullscreen() {
+        isFullscreen = !isFullscreen;
+        if (isFullscreen) {
+            document.body.appendChild(el);
+            el.classList.add("vewd-fullscreen");
+            fullscreenBtn.textContent = "✕";
+        } else {
+            el.classList.remove("vewd-fullscreen");
+            fullscreenBtn.textContent = "⛶";
+            // Widget will be re-added by ComfyUI
+        }
+        el.focus();
+    }
+
     el.onkeydown = (e) => {
+        const cols = isFullscreen ? 4 : 3;
         switch (e.key) {
             case "ArrowRight": e.preventDefault(); navigate(1); break;
             case "ArrowLeft": e.preventDefault(); navigate(-1); break;
-            case "ArrowDown": e.preventDefault(); navigate(3); break;
-            case "ArrowUp": e.preventDefault(); navigate(-3); break;
+            case "ArrowDown": e.preventDefault(); navigate(cols); break;
+            case "ArrowUp": e.preventDefault(); navigate(-cols); break;
             case " ":
                 e.preventDefault();
                 if (state.focusIndex >= 0) {
@@ -241,6 +294,12 @@ function createVewdWidget(node) {
                         ? state.tagged.delete(state.focusIndex)
                         : state.tagged.add(state.focusIndex);
                     update();
+                }
+                break;
+            case "Escape":
+                if (isFullscreen) {
+                    e.preventDefault();
+                    toggleFullscreen();
                 }
                 break;
         }
@@ -256,6 +315,7 @@ function createVewdWidget(node) {
         update();
     };
     exportBtn.onclick = exportSelects;
+    fullscreenBtn.onclick = toggleFullscreen;
 
     return { el, addImage, state };
 }
