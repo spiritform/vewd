@@ -147,19 +147,20 @@ style.textContent = `
         letter-spacing: 0.5px;
     }
     .vewd-bar button {
-        background: #252525;
-        border: none;
-        color: #777;
-        padding: 3px 10px;
+        background: transparent;
+        border: 1px solid #333;
+        color: #555;
+        padding: 2px 8px;
         border-radius: 3px;
         cursor: pointer;
-        font-size: 10px;
+        font-size: 9px;
+        line-height: 1.2;
     }
-    .vewd-bar button:hover { background: #333; color: #aaa; }
-    .vewd-bar button.on { background: #ff4a6a; color: #fff; }
-    .vewd-bar .export-btn { background: #1a1a1a; color: #333; pointer-events: none; }
-    .vewd-bar .export-btn.active { background: #eee; color: #222; pointer-events: auto; }
-    .vewd-bar .export-btn.active:hover { background: #fff; }
+    .vewd-bar button:hover { border-color: #555; color: #888; }
+    .vewd-bar button.on { border-color: #ff4a6a; color: #ff4a6a; }
+    .vewd-bar .export-btn { border-color: #222; color: #333; pointer-events: none; }
+    .vewd-bar .export-btn.active { border-color: #eee; color: #eee; pointer-events: auto; }
+    .vewd-bar .export-btn.active:hover { border-color: #fff; color: #fff; }
 
     /* Fullscreen overlay */
     .vewd-fullscreen {
