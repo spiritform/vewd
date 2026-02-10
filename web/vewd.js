@@ -374,14 +374,6 @@ app.registerExtension({
     async nodeCreated(node) {
         if (node.comfyClass !== "Vewd") return;
 
-        // Allow multiple connections to images input
-        const imagesInput = node.inputs?.find(i => i.name === "images");
-        if (imagesInput) {
-            imagesInput.type = "IMAGE";
-            // This flag allows multiple links to this input
-            node.inputs[0].multi_link = true;
-        }
-
         const widget = createVewdWidget(node);
         node.vewdWidget = widget;
 

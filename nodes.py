@@ -23,10 +23,12 @@ class Vewd:
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {
-                "images": ("IMAGE",),
-            },
+            "required": {},
             "optional": {
+                "in1": ("IMAGE",),
+                "in2": ("IMAGE",),
+                "in3": ("IMAGE",),
+                "in4": ("IMAGE",),
                 "folder": ("STRING", {"default": "C:/AI/comfy/ComfyUI/output/vewd"}),
                 "filename_prefix": ("STRING", {"default": "vewd"}),
                 "save_to_folder": ("BOOLEAN", {"default": True}),
@@ -42,19 +44,13 @@ class Vewd:
     FUNCTION = "process"
     CATEGORY = "image"
     OUTPUT_NODE = True
-    INPUT_IS_LIST = True
 
-    def process(self, images, folder=None, filename_prefix=None, save_to_folder=None, prompt=None, extra_pnginfo=None):
+    def process(self, in1=None, in2=None, in3=None, in4=None, folder="", filename_prefix="vewd", save_to_folder=True, prompt=None, extra_pnginfo=None):
         import torch
 
-        # Handle list inputs
-        folder = folder[0] if folder else ""
-        filename_prefix = filename_prefix[0] if filename_prefix else "vewd"
-        save_to_folder = save_to_folder[0] if save_to_folder else True
-
-        # Combine all image batches from multiple connections
+        # Combine all image inputs
         all_images = []
-        for img_batch in images:
+        for img_batch in [in1, in2, in3, in4]:
             if img_batch is not None:
                 all_images.append(img_batch)
 
@@ -101,7 +97,7 @@ class Vewd:
                 custom_path = Path(folder) / filename
                 pil_image.save(custom_path, format='PNG')
 
-        return {"ui": {"vewd_images": results}, "result": ([combined_images],)}
+        return {"ui": {"vewd_images": results}, "result": (combined_images,)}
 
 
 # Export API route
