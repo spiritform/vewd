@@ -367,19 +367,44 @@ function createVewdWidget(node) {
     return { el, addImage, state };
 }
 
+// Global widget reference for capture mode
+let globalVewdWidget = null;
+let captureMode = false;
+
 // Register
 app.registerExtension({
     name: "vewd",
+
+    async setup() {
+        // Hook into all node executions to capture images
+        api.addEventListener("executed", ({ detail }) => {
+            if (!captureMode || !globalVewdWidget) return;
+
+            const output = detail?.output;
+            if (output?.images) {
+                output.images.forEach(img => {
+                    const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
+                    globalVewdWidget.addImage(src, img.filename);
+                });
+            }
+        });
+    },
 
     async nodeCreated(node) {
         if (node.comfyClass !== "Vewd") return;
 
         const widget = createVewdWidget(node);
         node.vewdWidget = widget;
+        globalVewdWidget = widget;
 
         node.addDOMWidget("vewd_ui", "custom", widget.el, {
             serialize: false,
             hideOnZoom: false,
+        });
+
+        // Add capture toggle
+        node.addWidget("toggle", "capture_all", false, (v) => {
+            captureMode = v;
         });
 
         const orig = node.onExecuted;
