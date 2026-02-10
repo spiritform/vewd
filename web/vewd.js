@@ -1,6 +1,8 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
+console.log("[Vewd] Extension loaded");
+
 // Styles
 const style = document.createElement("style");
 style.textContent = `
@@ -39,14 +41,15 @@ style.textContent = `
     .vewd-item {
         aspect-ratio: 1;
         background: #0a0a0a;
-        border: 2px solid transparent;
+        border: 1px solid transparent;
         border-radius: 3px;
         overflow: hidden;
         cursor: pointer;
         position: relative;
+        transition: border-color 0.15s ease;
     }
-    .vewd-item:hover { border-color: #444; }
-    .vewd-item.selected { border-color: #888; }
+    .vewd-item:hover { border-color: #666; }
+    .vewd-item.selected { border-color: #fff; }
     .vewd-item.tagged::after {
         content: "v";
         position: absolute;
@@ -63,7 +66,17 @@ style.textContent = `
         justify-content: center;
     }
     .vewd-item.hidden { display: none; }
-    .vewd-item img { width: 100%; height: 100%; object-fit: contain; }
+    .vewd-item img, .vewd-item video { width: 100%; height: 100%; object-fit: contain; }
+    .vewd-item .audio-icon {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: #444;
+        background: #1a1a1a;
+    }
 
     .vewd-preview-area {
         flex: 1;
@@ -82,7 +95,16 @@ style.textContent = `
         padding: 10px;
     }
     .vewd-pane + .vewd-pane { border-left: 1px solid #222; }
-    .vewd-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .vewd-pane img, .vewd-pane video { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .vewd-pane audio { width: 80%; }
+    .vewd-pane .audio-preview {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        color: #666;
+    }
+    .vewd-pane .audio-preview .icon { font-size: 64px; }
 
     .vewd-bar {
         display: flex;
@@ -188,15 +210,34 @@ function createVewdWidget(node) {
     let isFullscreen = false;
     let originalParent = null;
 
-    function addImage(src, filename) {
+    function addMedia(src, filename, type = "image") {
         const item = document.createElement("div");
         item.className = "vewd-item";
-        item.innerHTML = `<img src="${src}">`;
+
+        if (type === "video") {
+            item.innerHTML = `<video src="${src}" muted loop></video>`;
+            // Play on hover
+            item.onmouseenter = () => item.querySelector("video")?.play();
+            item.onmouseleave = () => {
+                const v = item.querySelector("video");
+                if (v) { v.pause(); v.currentTime = 0; }
+            };
+        } else if (type === "audio") {
+            item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
+            item.onmouseenter = () => item.querySelector("audio")?.play();
+            item.onmouseleave = () => {
+                const a = item.querySelector("audio");
+                if (a) { a.pause(); a.currentTime = 0; }
+            };
+        } else {
+            item.innerHTML = `<img src="${src}">`;
+        }
+
         item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
 
         // Add to beginning
         grid.insertBefore(item, grid.firstChild);
-        state.images.unshift({ src, filename, el: item });
+        state.images.unshift({ src, filename, type, el: item });
 
         // Update click handlers with correct indices
         state.images.forEach((img, idx) => {
@@ -214,12 +255,17 @@ function createVewdWidget(node) {
 
         if (state.focusIndex >= 0) state.focusIndex++;
 
-        // Select new image
+        // Select new item
         state.selected.clear();
         state.selected.add(0);
         state.focusIndex = 0;
 
         update();
+    }
+
+    // Backwards compat
+    function addImage(src, filename) {
+        addMedia(src, filename, "image");
     }
 
     function handleClick(i, e) {
@@ -248,13 +294,22 @@ function createVewdWidget(node) {
         const sel = [...state.selected].sort((a, b) => a - b);
         const panes = previewArea.querySelectorAll(".vewd-pane");
 
+        function renderPreview(media) {
+            if (media.type === "video") {
+                return `<video src="${media.src}" controls autoplay muted loop></video>`;
+            } else if (media.type === "audio") {
+                return `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
+            }
+            return `<img src="${media.src}">`;
+        }
+
         if (sel.length >= 2) {
             previewArea.classList.remove("single");
-            panes[0].innerHTML = `<img src="${state.images[sel[0]].src}">`;
-            panes[1].innerHTML = `<img src="${state.images[sel[1]].src}">`;
+            panes[0].innerHTML = renderPreview(state.images[sel[0]]);
+            panes[1].innerHTML = renderPreview(state.images[sel[1]]);
         } else if (sel.length === 1) {
             previewArea.classList.add("single");
-            panes[0].innerHTML = `<img src="${state.images[sel[0]].src}">`;
+            panes[0].innerHTML = renderPreview(state.images[sel[0]]);
             panes[1].innerHTML = "";
         } else {
             previewArea.classList.add("single");
@@ -432,18 +487,68 @@ app.registerExtension({
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
+            // Debug: log all executed events
+            console.log("[Vewd] executed event:", detail?.node, detail?.output);
+
             const output = detail?.output;
+
+            // Handle images
             if (output?.images) {
                 output.images.forEach(img => {
-                    // Skip if we've already seen this image
                     const key = `${img.filename}_${img.subfolder || ""}`;
                     if (seenImages.has(key)) return;
                     seenImages.add(key);
 
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
-                    globalVewdWidget.addImage(src, img.filename);
+                    globalVewdWidget.addMedia(src, img.filename, "image");
                 });
             }
+
+            // Handle GIFs (VHS nodes)
+            if (output?.gifs) {
+                output.gifs.forEach(gif => {
+                    const key = `${gif.filename}_${gif.subfolder || ""}`;
+                    if (seenImages.has(key)) return;
+                    seenImages.add(key);
+
+                    const src = api.apiURL(`/view?filename=${encodeURIComponent(gif.filename)}&subfolder=${encodeURIComponent(gif.subfolder || "")}&type=${gif.type}&t=${Date.now()}`);
+                    globalVewdWidget.addMedia(src, gif.filename, "video");
+                });
+            }
+
+            // Handle videos
+            if (output?.videos) {
+                output.videos.forEach(vid => {
+                    const key = `${vid.filename}_${vid.subfolder || ""}`;
+                    if (seenImages.has(key)) return;
+                    seenImages.add(key);
+
+                    const src = api.apiURL(`/view?filename=${encodeURIComponent(vid.filename)}&subfolder=${encodeURIComponent(vid.subfolder || "")}&type=${vid.type}&t=${Date.now()}`);
+                    globalVewdWidget.addMedia(src, vid.filename, "video");
+                });
+            }
+
+            // Handle audio - try multiple keys that different nodes use
+            const audioSources = output?.audio || output?.audios || output?.audio_file;
+            if (audioSources) {
+                const audioList = Array.isArray(audioSources) ? audioSources : [audioSources];
+                audioList.forEach(aud => {
+                    const key = `${aud.filename}_${aud.subfolder || ""}`;
+                    if (seenImages.has(key)) return;
+                    seenImages.add(key);
+
+                    const src = api.apiURL(`/view?filename=${encodeURIComponent(aud.filename)}&subfolder=${encodeURIComponent(aud.subfolder || "")}&type=${aud.type || "output"}&t=${Date.now()}`);
+                    globalVewdWidget.addMedia(src, aud.filename, "audio");
+                });
+            }
+
+            // Debug: log unknown output types to console
+            const knownKeys = new Set(["images", "gifs", "videos", "audio", "audios", "audio_file", "vewd_images"]);
+            Object.keys(output || {}).forEach(key => {
+                if (!knownKeys.has(key)) {
+                    console.log("[Vewd] Unknown output key:", key, output[key]);
+                }
+            });
         });
     },
 
