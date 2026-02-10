@@ -353,6 +353,10 @@ function createVewdWidget(node) {
         }
     };
 
+    // Stop clicks from selecting the node
+    el.onclick = (e) => e.stopPropagation();
+    el.onmousedown = (e) => e.stopPropagation();
+
     filterBtn.onclick = () => { state.filterOn = !state.filterOn; update(); };
     clearBtn.onclick = () => {
         state.images.forEach(img => img.el.remove());
