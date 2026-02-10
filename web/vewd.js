@@ -226,6 +226,7 @@ function createVewdWidget(node) {
         taggedCountEl.textContent = `${state.tagged.size} tagged`;
         filterBtn.classList.toggle("on", state.filterOn);
         exportBtn.classList.toggle("active", state.tagged.size > 0);
+        exportBtn.textContent = state.tagged.size > 0 ? `Export (${state.tagged.size})` : "Export Selects";
     }
 
     function navigate(d) {
