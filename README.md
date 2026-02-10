@@ -14,7 +14,7 @@ A media viewer node for ComfyUI. Auto-captures all generated media into a grid f
 - **All media types** - Images, videos, and audio
 - **Grid view** - See all generations in a thumbnail grid
 - **Preview & compare** - Click to preview, select two to compare side-by-side
-- **Heart favorites** - Space to heart your favorites
+- **Heart favorites** - Use spacebar to make selects of your favorites (Like Filter)
 - **Media filters** - Filter by All, Images, Videos, or Audio
 - **Export selects** - Export hearted media with custom filename prefix
 - **Fullscreen** - Expand to fullscreen for better viewing
