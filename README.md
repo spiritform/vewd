@@ -1,8 +1,12 @@
 # Vewd
 
-A simple image viewer node for ComfyUI. Auto-captures all generated images into a grid for easy review, tagging, and export.
+A media viewer node for ComfyUI. Auto-captures all generated images into a grid for easy review, tagging, and export.
 
 ![Vewd Screenshot](screenshot.png)
+
+## Why Vewd?
+
+**Reduce waste, save only what you want.** Instead of saving hundreds of images to your hard drive and sorting through them later, Vewd lets you review generations in real-time, tag the ones you like, and export only your selects.
 
 ## Features
 
