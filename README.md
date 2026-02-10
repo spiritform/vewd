@@ -4,6 +4,8 @@ A media viewer node for ComfyUI. Auto-captures all generated media into a grid f
 
 ![Vewd Screenshot](screenshot.png)
 
+![Vewd Node Toolbar](screenshot2.png)
+
 ## Why Vewd?
 
 **Reduce waste, save only what you want.** Instead of saving hundreds of images to your hard drive and sorting through them later, Vewd lets you review generations in real-time, heart your favorites, and export only your selects.
