@@ -23,10 +23,12 @@ class Vewd:
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {
-                "images": ("IMAGE",),
-            },
+            "required": {},
             "optional": {
+                "images_1": ("IMAGE",),
+                "images_2": ("IMAGE",),
+                "images_3": ("IMAGE",),
+                "images_4": ("IMAGE",),
                 "folder": ("STRING", {"default": "C:/AI/comfy/ComfyUI/output/vewd"}),
                 "filename_prefix": ("STRING", {"default": "vewd"}),
                 "save_to_folder": ("BOOLEAN", {"default": True}),
@@ -42,23 +44,18 @@ class Vewd:
     FUNCTION = "process"
     CATEGORY = "image"
     OUTPUT_NODE = True
-    INPUT_IS_LIST = True
 
-    def process(self, images, folder=[""], filename_prefix=["vewd"], save_to_folder=[True], prompt=None, extra_pnginfo=None):
-        # Handle list inputs (take first value for non-image params)
-        folder = folder[0] if isinstance(folder, list) else folder
-        filename_prefix = filename_prefix[0] if isinstance(filename_prefix, list) else filename_prefix
-        save_to_folder = save_to_folder[0] if isinstance(save_to_folder, list) else save_to_folder
-
-        # Combine all image batches
+    def process(self, images_1=None, images_2=None, images_3=None, images_4=None, folder="", filename_prefix="vewd", save_to_folder=True, prompt=None, extra_pnginfo=None):
         import torch
+
+        # Combine all image inputs
         all_images = []
-        for img_batch in images:
+        for img_batch in [images_1, images_2, images_3, images_4]:
             if img_batch is not None:
                 all_images.append(img_batch)
 
         if not all_images:
-            return {"ui": {"vewd_images": []}, "result": ([],)}
+            return {"ui": {"vewd_images": []}, "result": (None,)}
 
         combined_images = torch.cat(all_images, dim=0)
         results = []
@@ -100,7 +97,7 @@ class Vewd:
                 custom_path = Path(folder) / filename
                 pil_image.save(custom_path, format='PNG')
 
-        return {"ui": {"vewd_images": results}, "result": ([combined_images],)}
+        return {"ui": {"vewd_images": results}, "result": (combined_images,)}
 
 
 # Export API route
