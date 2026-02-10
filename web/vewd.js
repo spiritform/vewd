@@ -359,6 +359,7 @@ function createVewdWidget(node) {
         state.focusIndex = -1;
         state.selected.clear();
         state.tagged.clear();
+        seenImages.clear();
         update();
     };
     exportBtn.onclick = exportSelects;
@@ -369,6 +370,7 @@ function createVewdWidget(node) {
 
 // Global widget reference
 let globalVewdWidget = null;
+let seenImages = new Set();
 
 // Register
 app.registerExtension({
@@ -382,6 +384,11 @@ app.registerExtension({
             const output = detail?.output;
             if (output?.images) {
                 output.images.forEach(img => {
+                    // Skip if we've already seen this image
+                    const key = `${img.filename}_${img.subfolder || ""}`;
+                    if (seenImages.has(key)) return;
+                    seenImages.add(key);
+
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
                     globalVewdWidget.addImage(src, img.filename);
                 });
