@@ -11,36 +11,57 @@ Simple image viewer for batch generations. Built for reviewing AI image outputs.
 - **Save selects** - Export tagged images with `_select01` suffix
 - **ComfyUI integration** - Custom node sends images directly to viewer
 
-## Installation
+## Quick Start
 
-### Viewer
+### 1. Clone the repo
 
 ```bash
-# Clone the repo
-git clone https://github.com/yourusername/vewd.git
-cd vewd
-
-# Run viewer (point to your output folder)
-python viewer.py C:\path\to\your\images
-
-# Or use the bat file
-viewer.bat
+git clone https://github.com/spiritform/vewd.git
 ```
 
-### ComfyUI Node
+### 2. Run the viewer
 
-1. Copy the `comfyui` folder to `ComfyUI/custom_nodes/vewd`
-2. Restart ComfyUI
-3. Add "Vewd Preview" node after VAE Decode
-4. Set the folder path to match your viewer
+```bash
+cd vewd
+python viewer.py "C:\path\to\your\images"
+```
 
-## Usage
+Or double-click `viewer.bat` (edit the default folder path first).
 
-### Keyboard Shortcuts
+The viewer opens in your browser and watches the folder for new images.
+
+## ComfyUI Node
+
+### Install
+
+Clone directly into ComfyUI's custom_nodes folder:
+
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/spiritform/vewd.git
+```
+
+Restart ComfyUI.
+
+### Usage
+
+1. Add **Vewd Preview** node (found under `image` category)
+2. Connect it after VAE Decode
+3. Set the `folder` path to where you want images saved
+4. Run the viewer pointing to the same folder
+5. Generate - images appear in viewer automatically
+
+```
+[VAE Decode] ──IMAGE──> [Vewd Preview]
+                              │
+                           folder: C:/AI/outputs/vewd
+```
+
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| Arrow keys | Navigate |
+| ← → ↑ ↓ | Navigate grid |
 | Space | Tag/untag image |
 | T | Toggle tagged filter |
 | S | Save tagged images |
@@ -50,20 +71,19 @@ viewer.bat
 | Ctrl+Click | Multi-select |
 | Shift+Click | Range select |
 
-### Workflow
+## Workflow
 
-1. Start the viewer pointing to your output folder
-2. In ComfyUI, add Vewd Preview node after VAE Decode
-3. Set the same folder path in the node
-4. Generate images - they appear in the viewer automatically
-5. Use Space to tag the ones you like
-6. Press S to save tagged images
+1. Start viewer: `python viewer.py "C:/AI/outputs/vewd"`
+2. Generate images in ComfyUI with Vewd Preview node
+3. Images appear in viewer as they're generated
+4. Navigate with arrow keys, press **Space** to tag keepers
+5. Press **T** to filter to tagged only
+6. Press **S** to save tagged images (copies with `_select01` suffix)
 
 ## Requirements
 
 - Python 3.8+
-- PIL (Pillow)
-- tkinter (usually included with Python)
+- Pillow
 
 ```bash
 pip install Pillow
