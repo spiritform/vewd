@@ -21,7 +21,7 @@ style.textContent = `
     }
 
     .vewd-grid-area {
-        width: 40%;
+        width: 35%;
         overflow-y: auto;
         padding: 6px;
         background: #151515;
@@ -47,7 +47,7 @@ style.textContent = `
     .vewd-item:hover { border-color: #333; }
     .vewd-item.selected { border-color: #4a9eff; }
     .vewd-item.tagged::after {
-        content: "✓";
+        content: "v";
         position: absolute;
         top: 2px;
         right: 2px;
@@ -68,20 +68,12 @@ style.textContent = `
         flex: 1;
         background: #0a0a0a;
         display: flex;
-        min-width: 0;
-    }
-    .vewd-preview-area.single .vewd-pane:nth-child(2) { display: none; }
-
-    .vewd-pane {
-        flex: 1;
-        display: flex;
         align-items: center;
         justify-content: center;
-        padding: 8px;
+        padding: 10px;
         min-width: 0;
     }
-    .vewd-pane + .vewd-pane { border-left: 1px solid #222; }
-    .vewd-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .vewd-preview-area img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
     .vewd-bar {
         display: flex;
@@ -96,13 +88,15 @@ style.textContent = `
         background: #252525;
         border: none;
         color: #777;
-        padding: 2px 8px;
+        padding: 3px 10px;
         border-radius: 3px;
         cursor: pointer;
         font-size: 10px;
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
     .vewd-bar button.on { background: #4a9eff; color: #fff; }
+    .vewd-bar .export-btn { background: #2a5a2a; color: #8f8; }
+    .vewd-bar .export-btn:hover { background: #3a6a3a; }
 `;
 document.head.appendChild(style);
 
@@ -122,27 +116,25 @@ function createVewdWidget(node) {
     el.innerHTML = `
         <div class="vewd-main">
             <div class="vewd-grid-area"><div class="vewd-grid"></div></div>
-            <div class="vewd-preview-area single">
-                <div class="vewd-pane"></div>
-                <div class="vewd-pane"></div>
-            </div>
+            <div class="vewd-preview-area"></div>
         </div>
         <div class="vewd-bar">
             <span class="count">0</span>
             <span class="tagged-count">0 tagged</span>
             <button class="filter-btn">Filter</button>
             <button class="clear-btn">Clear</button>
-            <span style="margin-left:auto;color:#444">Space: tag • Arrows: nav</span>
+            <button class="export-btn">Export Selects</button>
+            <span style="margin-left:auto;color:#444">Space: tag</span>
         </div>
     `;
 
     const grid = el.querySelector(".vewd-grid");
     const previewArea = el.querySelector(".vewd-preview-area");
-    const panes = el.querySelectorAll(".vewd-pane");
     const countEl = el.querySelector(".count");
     const taggedCountEl = el.querySelector(".tagged-count");
     const filterBtn = el.querySelector(".filter-btn");
     const clearBtn = el.querySelector(".clear-btn");
+    const exportBtn = el.querySelector(".export-btn");
 
     function addImage(src, filename) {
         const i = state.images.length;
@@ -182,18 +174,12 @@ function createVewdWidget(node) {
             img.el.classList.toggle("hidden", state.filterOn && !state.tagged.has(i));
         });
 
+        // Single preview
         const sel = [...state.selected].sort((a, b) => a - b);
-        if (sel.length >= 2) {
-            previewArea.classList.remove("single");
-            panes[0].innerHTML = `<img src="${state.images[sel[0]].src}">`;
-            panes[1].innerHTML = `<img src="${state.images[sel[1]].src}">`;
-        } else if (sel.length === 1) {
-            previewArea.classList.add("single");
-            panes[0].innerHTML = `<img src="${state.images[sel[0]].src}">`;
-            panes[1].innerHTML = "";
+        if (sel.length >= 1) {
+            previewArea.innerHTML = `<img src="${state.images[sel[0]].src}">`;
         } else {
-            panes[0].innerHTML = "";
-            panes[1].innerHTML = "";
+            previewArea.innerHTML = "";
         }
 
         countEl.textContent = state.images.length;
@@ -209,6 +195,37 @@ function createVewdWidget(node) {
         state.focusIndex = i;
         state.images[i].el.scrollIntoView({ block: "nearest" });
         update();
+    }
+
+    async function exportSelects() {
+        const tagged = state.images.filter((_, i) => state.tagged.has(i));
+        if (tagged.length === 0) {
+            alert("No tagged images to export");
+            return;
+        }
+
+        // Get folder from node widget
+        const folderWidget = node.widgets?.find(w => w.name === "folder");
+        const folder = folderWidget?.value || "";
+
+        try {
+            const res = await api.fetchApi("/vewd/export", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    folder: folder,
+                    images: tagged.map(img => img.filename)
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Exported ${data.count} images`);
+            } else {
+                alert("Export failed: " + data.error);
+            }
+        } catch (e) {
+            alert("Export failed: " + e.message);
+        }
     }
 
     el.onkeydown = (e) => {
@@ -238,6 +255,7 @@ function createVewdWidget(node) {
         state.tagged.clear();
         update();
     };
+    exportBtn.onclick = exportSelects;
 
     return { el, addImage, state };
 }
