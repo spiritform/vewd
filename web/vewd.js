@@ -245,9 +245,11 @@ function createVewdWidget(node) {
             return;
         }
 
-        // Get folder from node widget
+        // Get folder and prefix from node widgets
         const folderWidget = node.widgets?.find(w => w.name === "folder");
+        const prefixWidget = node.widgets?.find(w => w.name === "filename_prefix");
         const folder = folderWidget?.value || "";
+        const prefix = prefixWidget?.value || "select";
 
         try {
             const res = await api.fetchApi("/vewd/export", {
@@ -255,6 +257,7 @@ function createVewdWidget(node) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     folder: folder,
+                    prefix: prefix,
                     images: tagged.map(img => img.filename)
                 })
             });

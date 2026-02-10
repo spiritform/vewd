@@ -92,6 +92,7 @@ async def export_selects(request):
     try:
         data = await request.json()
         folder = data.get("folder", "")
+        prefix = data.get("prefix", "select")
         images = data.get("images", [])
 
         if not folder or not images:
@@ -103,7 +104,6 @@ async def export_selects(request):
 
         temp_dir = folder_paths.get_temp_directory()
         count = 0
-        timestamp = int(time.time() * 1000)
 
         for i, filename in enumerate(images):
             # Try temp folder first, then the main folder
@@ -112,13 +112,13 @@ async def export_selects(request):
                 src_path = Path(folder) / filename
 
             if src_path.exists():
-                # New name with select prefix
-                new_name = f"select_{timestamp}_{i:03d}.png"
+                # New name with user's prefix
+                new_name = f"{prefix}_{i + 1:03d}.png"
                 dst_path = selects_dir / new_name
                 shutil.copy2(src_path, dst_path)
                 count += 1
 
-        return web.json_response({"success": True, "count": count})
+        return web.json_response({"success": True, "count": count, "folder": str(selects_dir)})
 
     except Exception as e:
         return web.json_response({"success": False, "error": str(e)})
