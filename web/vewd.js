@@ -141,6 +141,11 @@ style.textContent = `
         color: #555;
         align-items: center;
     }
+    .vewd-bar .vewd-logo {
+        color: #fff;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
     .vewd-bar button {
         background: #252525;
         border: none;
@@ -216,6 +221,7 @@ function createVewdWidget(node) {
             </div>
         </div>
         <div class="vewd-bar">
+            <span class="vewd-logo">vewd</span>
             <button class="fullscreen-btn">⛶</button>
             <span class="count">0</span>
             <span class="tagged-count">0 tagged</span>
@@ -387,6 +393,12 @@ function createVewdWidget(node) {
         } else {
             state.focusIndex = -1;
         }
+
+        // Rebind click handlers with correct indices
+        state.images.forEach((img, idx) => {
+            img.el.onclick = (e) => handleClick(idx, e);
+        });
+
         update();
     }
 
