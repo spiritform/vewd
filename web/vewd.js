@@ -238,6 +238,35 @@ function createVewdWidget(node) {
         update();
     }
 
+    function deleteSelected() {
+        if (state.selected.size === 0 || state.images.length === 0) return;
+
+        const toDelete = [...state.selected].sort((a, b) => b - a);
+        toDelete.forEach(i => {
+            state.images[i].el.remove();
+            state.images.splice(i, 1);
+            state.tagged.delete(i);
+        });
+
+        // Reindex tagged
+        const newTagged = new Set();
+        state.tagged.forEach(t => {
+            let offset = 0;
+            toDelete.forEach(d => { if (d < t) offset++; });
+            newTagged.add(t - offset);
+        });
+        state.tagged = newTagged;
+
+        state.selected.clear();
+        if (state.images.length > 0) {
+            state.focusIndex = Math.min(state.focusIndex, state.images.length - 1);
+            state.selected.add(state.focusIndex);
+        } else {
+            state.focusIndex = -1;
+        }
+        update();
+    }
+
     async function exportSelects() {
         const tagged = state.images.filter((_, i) => state.tagged.has(i));
         if (tagged.length === 0) {
@@ -292,12 +321,13 @@ function createVewdWidget(node) {
     el.onkeydown = (e) => {
         const cols = isFullscreen ? 4 : 3;
         switch (e.key) {
-            case "ArrowRight": e.preventDefault(); navigate(1); break;
-            case "ArrowLeft": e.preventDefault(); navigate(-1); break;
-            case "ArrowDown": e.preventDefault(); navigate(cols); break;
-            case "ArrowUp": e.preventDefault(); navigate(-cols); break;
+            case "ArrowRight": e.preventDefault(); e.stopPropagation(); navigate(1); break;
+            case "ArrowLeft": e.preventDefault(); e.stopPropagation(); navigate(-1); break;
+            case "ArrowDown": e.preventDefault(); e.stopPropagation(); navigate(cols); break;
+            case "ArrowUp": e.preventDefault(); e.stopPropagation(); navigate(-cols); break;
             case " ":
                 e.preventDefault();
+                e.stopPropagation();
                 if (state.focusIndex >= 0) {
                     state.tagged.has(state.focusIndex)
                         ? state.tagged.delete(state.focusIndex)
@@ -305,9 +335,16 @@ function createVewdWidget(node) {
                     update();
                 }
                 break;
+            case "Delete":
+            case "Backspace":
+                e.preventDefault();
+                e.stopPropagation();
+                deleteSelected();
+                break;
             case "Escape":
                 if (isFullscreen) {
                     e.preventDefault();
+                    e.stopPropagation();
                     toggleFullscreen();
                 }
                 break;
