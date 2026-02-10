@@ -16,6 +16,32 @@ style.textContent = `
         outline: none;
     }
 
+    .vewd-header {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #1a1a1a;
+        border-bottom: 1px solid #222;
+        align-items: center;
+        font-size: 13px;
+        color: #555;
+    }
+    .vewd-header input {
+        background: #252525;
+        border: none;
+        color: #777;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-family: inherit;
+        min-width: 0;
+        line-height: 1.3;
+    }
+    .vewd-header .folder-input { width: 320px; }
+    .vewd-header .prefix-input { width: 120px; }
+    .vewd-header input:focus { color: #ccc; outline: none; }
+    .vewd-header label { color: #555; font-size: 12px; white-space: nowrap; }
+
     .vewd-main {
         flex: 1;
         display: flex;
@@ -103,6 +129,18 @@ style.textContent = `
         padding: 10px;
     }
     .vewd-pane + .vewd-pane { border-left: 1px solid #222; }
+    .vewd-pane { position: relative; overflow: hidden; }
+    .vewd-pane.active-pane { box-shadow: inset 0 0 0 2px #fff; }
+    .vewd-pane .pane-heart {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        color: #ff4a6a;
+        font-size: 20px;
+        text-shadow: 0 0 4px rgba(0,0,0,0.8);
+        display: none;
+    }
+    .vewd-pane.pane-tagged .pane-heart { display: block; }
     .vewd-pane img, .vewd-pane video { max-width: 100%; max-height: 100%; object-fit: contain; }
     .vewd-pane .audio-preview {
         display: flex;
@@ -112,34 +150,51 @@ style.textContent = `
         color: #666;
         width: 100%;
     }
+    .vewd-toast {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.8);
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        pointer-events: none;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .vewd-toast.show { opacity: 1; }
+
     .vewd-pane .audio-preview .icon { font-size: 64px; }
     .vewd-pane .audio-preview audio { width: 80%; height: 40px; }
 
     .vewd-filters {
         display: flex;
-        gap: 4px;
-        margin-left: 8px;
+        gap: 6px;
     }
     .vewd-filters button {
         background: transparent;
         border: 1px solid #333;
         color: #555;
-        padding: 2px 8px;
+        padding: 4px 12px;
         border-radius: 3px;
         cursor: pointer;
-        font-size: 9px;
+        font-size: 12px;
     }
     .vewd-filters button:hover { border-color: #555; color: #888; }
-    .vewd-filters button.active { border-color: #4a9eff; color: #4a9eff; }
+    .vewd-filters button.active { border-color: #fff; color: #fff; }
 
     .vewd-bar {
         display: flex;
-        gap: 8px;
-        padding: 5px 8px;
+        gap: 6px 8px;
+        padding: 8px 12px;
         background: #1a1a1a;
-        font-size: 10px;
+        font-size: 13px;
         color: #555;
         align-items: center;
+        flex-wrap: wrap;
     }
     .vewd-bar .vewd-logo {
         color: #fff !important;
@@ -151,17 +206,22 @@ style.textContent = `
         background: #252525;
         border: none;
         color: #777;
-        padding: 2px 8px;
+        padding: 4px 12px;
         border-radius: 3px;
         cursor: pointer;
-        font-size: 9px;
-        line-height: 1.2;
+        font-size: 12px;
+        line-height: 1.3;
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
     .vewd-bar button.on { background: #ff4a6a; color: #fff; }
+    .vewd-bar .save-btn { background: #1a1a1a; color: #333; pointer-events: none; }
+    .vewd-bar .save-btn.active { background: #252525; color: #777; pointer-events: auto; }
+    .vewd-bar .save-btn.active:hover { background: #333; color: #aaa; }
     .vewd-bar .export-btn { background: #1a1a1a; color: #333; pointer-events: none; }
-    .vewd-bar .export-btn.active { background: #eee; color: #222; pointer-events: auto; }
-    .vewd-bar .export-btn.active:hover { background: #fff; }
+    .vewd-bar .export-btn.active { background: #252525; color: #777; pointer-events: auto; }
+    .vewd-bar .export-btn.active:hover { background: #333; color: #aaa; }
+    .vewd-bar .flash { background: #fff !important; color: #111 !important; transition: none; }
+    .vewd-bar .flash-fade { transition: background 0.6s, color 0.6s; }
 
     /* Fullscreen overlay */
     .vewd-fullscreen {
@@ -208,35 +268,43 @@ function createVewdWidget(node) {
         selected: new Set(),
         tagged: new Set(),
         filterOn: false,
-        typeFilter: "all"
+        typeFilter: "all",
+        autoExport: false
     };
 
     const el = document.createElement("div");
     el.className = "vewd-container";
     el.tabIndex = 0;
     el.innerHTML = `
+        <div class="vewd-header">
+            <label>folder</label><input class="folder-input" type="text" spellcheck="false">
+            <label>prefix</label><input class="prefix-input" type="text" spellcheck="false">
+        </div>
         <div class="vewd-main">
             <div class="vewd-grid-area"><div class="vewd-grid"></div></div>
-            <div class="vewd-preview-area single">
+            <div class="vewd-preview-area single" style="position:relative">
                 <div class="vewd-pane"></div>
                 <div class="vewd-pane"></div>
+                <div class="vewd-toast"></div>
             </div>
         </div>
         <div class="vewd-bar">
-            <button class="vewd-logo">vewd</button>
             <button class="fullscreen-btn">⛶</button>
-            <span class="count">0</span>
-            <span class="tagged-count">0 tagged</span>
             <div class="vewd-filters">
                 <button class="type-filter active" data-type="all">all</button>
                 <button class="type-filter" data-type="image">img</button>
                 <button class="type-filter" data-type="video">vid</button>
                 <button class="type-filter" data-type="audio">aud</button>
             </div>
+            <span class="count">0</span>
             <button class="filter-btn">❤</button>
+            <span class="tagged-count">0</span>
+            <button class="auto-export-btn">auto</button>
             <button class="clear-btn">clear</button>
-            <button class="export-btn">export</button>
+            <button class="export-btn">export selects</button>
+            <button class="save-btn">save</button>
             <span style="margin-left:auto;color:#444">spacebar ❤ | esc exit</span>
+            <button class="vewd-logo">vewd</button>
         </div>
     `;
 
@@ -246,11 +314,36 @@ function createVewdWidget(node) {
     const taggedCountEl = el.querySelector(".tagged-count");
     const filterBtn = el.querySelector(".filter-btn");
     const clearBtn = el.querySelector(".clear-btn");
+    const saveBtn = el.querySelector(".save-btn");
     const exportBtn = el.querySelector(".export-btn");
+    const autoExportBtn = el.querySelector(".auto-export-btn");
     const fullscreenBtn = el.querySelector(".fullscreen-btn");
     const logoBtn = el.querySelector(".vewd-logo");
+    const folderInput = el.querySelector(".folder-input");
+    const prefixInput = el.querySelector(".prefix-input");
+    const toastEl = el.querySelector(".vewd-toast");
+    let toastTimer = null;
+
+    function showToast(msg, duration = 2000) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.remove("show"), duration);
+    }
+
+    function flashBtn(btn) {
+        btn.classList.add("flash");
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                btn.classList.remove("flash");
+                btn.classList.add("flash-fade");
+                setTimeout(() => btn.classList.remove("flash-fade"), 600);
+            });
+        });
+    }
     let isFullscreen = false;
     let originalParent = null;
+    let activePaneIndex = -1; // -1 = no pane active, 0 = left, 1 = right
 
     function addMedia(src, filename, type = "image", sourceInfo = null) {
         const item = document.createElement("div");
@@ -330,35 +423,62 @@ function createVewdWidget(node) {
         const panes = previewArea.querySelectorAll(".vewd-pane");
 
         function renderPreview(media) {
+            let content = "";
             if (media.type === "video") {
-                return `<video src="${media.src}" controls muted loop></video>`;
+                content = `<video src="${media.src}" controls muted loop></video>`;
             } else if (media.type === "audio") {
-                return `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
+                content = `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
+            } else {
+                content = `<img src="${media.src}">`;
             }
-            return `<img src="${media.src}">`;
+            return content + `<span class="pane-heart">❤</span>`;
+        }
+
+        function setupPane(pane, imgIndex, paneIdx) {
+            pane.innerHTML = renderPreview(state.images[imgIndex]);
+            pane.classList.toggle("pane-tagged", state.tagged.has(imgIndex));
+            pane.onclick = (e) => { e.stopPropagation(); activePaneIndex = paneIdx; updatePaneHighlight(); };
         }
 
         if (sel.length >= 2) {
             previewArea.classList.remove("single");
-            panes[0].innerHTML = renderPreview(state.images[sel[0]]);
-            panes[1].innerHTML = renderPreview(state.images[sel[1]]);
+            setupPane(panes[0], sel[0], 0);
+            setupPane(panes[1], sel[1], 1);
         } else if (sel.length === 1) {
             previewArea.classList.add("single");
-            panes[0].innerHTML = renderPreview(state.images[sel[0]]);
+            setupPane(panes[0], sel[0], 0);
             panes[1].innerHTML = "";
+            panes[1].classList.remove("pane-tagged");
+            activePaneIndex = -1;
         } else {
             previewArea.classList.add("single");
             panes[0].innerHTML = "";
             panes[1].innerHTML = "";
+            panes[0].classList.remove("pane-tagged");
+            panes[1].classList.remove("pane-tagged");
+            activePaneIndex = -1;
         }
+        updatePaneHighlight();
 
         countEl.textContent = state.images.length;
-        taggedCountEl.textContent = `${state.tagged.size} ❤`;
+        taggedCountEl.textContent = state.tagged.size;
         filterBtn.classList.toggle("on", state.filterOn);
 
-        const exportCount = state.tagged.size > 0 ? state.tagged.size : state.selected.size;
+        const saveCount = state.selected.size;
+        saveBtn.classList.toggle("active", saveCount > 0);
+        saveBtn.textContent = saveCount > 0 ? `save (${saveCount})` : "save";
+
+        const exportCount = state.selected.size > 0 ? state.selected.size : (state.filterOn ? state.tagged.size : 0);
         exportBtn.classList.toggle("active", exportCount > 0);
-        exportBtn.textContent = exportCount > 0 ? `export (${exportCount})` : "export";
+        exportBtn.textContent = exportCount > 0 ? `export selects (${exportCount})` : "export selects";
+
+        autoExportBtn.classList.toggle("on", state.autoExport);
+    }
+
+    function updatePaneHighlight() {
+        const panes = previewArea.querySelectorAll(".vewd-pane");
+        panes[0].classList.toggle("active-pane", activePaneIndex === 0);
+        panes[1].classList.toggle("active-pane", activePaneIndex === 1);
     }
 
     function navigate(d) {
@@ -406,19 +526,19 @@ function createVewdWidget(node) {
     }
 
     async function exportSelects() {
-        const toExport = state.tagged.size > 0
-            ? state.images.filter((_, i) => state.tagged.has(i))
-            : state.images.filter((_, i) => state.selected.has(i));
+        const toExport = state.selected.size > 0
+            ? state.images.filter((_, i) => state.selected.has(i))
+            : state.filterOn
+                ? state.images.filter((_, i) => state.tagged.has(i))
+                : [];
 
         if (toExport.length === 0) {
-            alert("No images to export");
+            showToast("No images to export");
             return;
         }
 
-        const folderWidget = node.widgets?.find(w => w.name === "folder");
-        const prefixWidget = node.widgets?.find(w => w.name === "filename_prefix");
-        const folder = folderWidget?.value || "";
-        const prefix = prefixWidget?.value || "select";
+        const folder = folderInput.value || "";
+        const prefix = prefixInput.value || "vewd";
 
         try {
             const res = await api.fetchApi("/vewd/export", {
@@ -430,18 +550,87 @@ function createVewdWidget(node) {
                     images: toExport.map(img => ({
                         filename: img.filename,
                         subfolder: img.sourceInfo?.subfolder || "",
-                        type: img.sourceInfo?.type || "temp"
+                        type: img.sourceInfo?.type || "temp",
+                        seed: img.sourceInfo?.seed || null
                     }))
                 })
             });
             const data = await res.json();
             if (data.success) {
-                alert(`Exported ${data.count} images`);
+                showToast(`Exported ${data.count} images`);
+                flashBtn(exportBtn);
             } else {
-                alert("Export failed: " + data.error);
+                showToast("Export failed");
             }
         } catch (e) {
-            alert("Export failed: " + e.message);
+            showToast("Export failed");
+        }
+    }
+
+    async function saveImages() {
+        const toSave = state.selected.size > 0
+            ? state.images.filter((_, i) => state.selected.has(i))
+            : [];
+
+        if (toSave.length === 0) {
+            showToast("No images selected");
+            return;
+        }
+
+        const folder = folderInput.value || "";
+        const prefix = prefixInput.value || "vewd";
+
+        try {
+            const res = await api.fetchApi("/vewd/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    folder: folder,
+                    prefix: prefix,
+                    images: toSave.map(img => ({
+                        filename: img.filename,
+                        subfolder: img.sourceInfo?.subfolder || "",
+                        type: img.sourceInfo?.type || "temp",
+                        seed: img.sourceInfo?.seed || null
+                    }))
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`Saved ${data.count} images`);
+                flashBtn(saveBtn);
+            } else {
+                showToast("Save failed");
+            }
+        } catch (e) {
+            showToast("Save failed");
+        }
+    }
+
+    async function autoExportTagged() {
+        if (!state.autoExport || state.tagged.size === 0) return;
+
+        const toExport = state.images.filter((_, i) => state.tagged.has(i));
+        const folder = folderInput.value || "";
+        const prefix = prefixInput.value || "vewd";
+
+        try {
+            await api.fetchApi("/vewd/export", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    folder: folder,
+                    prefix: prefix,
+                    images: toExport.map(img => ({
+                        filename: img.filename,
+                        subfolder: img.sourceInfo?.subfolder || "",
+                        type: img.sourceInfo?.type || "temp",
+                        seed: img.sourceInfo?.seed || null
+                    }))
+                })
+            });
+        } catch (e) {
+            console.error("[Vewd] Auto-export failed:", e);
         }
     }
 
@@ -472,11 +661,23 @@ function createVewdWidget(node) {
             case " ":
                 e.preventDefault();
                 e.stopPropagation();
-                if (state.focusIndex >= 0) {
-                    state.tagged.has(state.focusIndex)
-                        ? state.tagged.delete(state.focusIndex)
-                        : state.tagged.add(state.focusIndex);
-                    update();
+                {
+                    // If a compare pane is active, heart that image
+                    let tagIdx = -1;
+                    if (activePaneIndex >= 0) {
+                        const sel = [...state.selected].sort((a, b) => a - b);
+                        if (sel.length >= 2 && activePaneIndex < 2) {
+                            tagIdx = sel[activePaneIndex];
+                        }
+                    } else {
+                        tagIdx = state.focusIndex;
+                    }
+                    if (tagIdx >= 0) {
+                        state.tagged.has(tagIdx)
+                            ? state.tagged.delete(tagIdx)
+                            : state.tagged.add(tagIdx);
+                        update();
+                    }
                 }
                 break;
             case "Delete":
@@ -511,11 +712,29 @@ function createVewdWidget(node) {
         seenImages.clear();
         update();
     };
+    saveBtn.onclick = saveImages;
     exportBtn.onclick = exportSelects;
+    autoExportBtn.onclick = () => { state.autoExport = !state.autoExport; update(); };
     fullscreenBtn.onclick = toggleFullscreen;
     logoBtn.onclick = () => window.open("https://x.com/spiritform", "_blank");
 
-    return { el, addImage, addMedia, state };
+    // Sync folder/prefix inputs with hidden ComfyUI widgets
+    function initInputs() {
+        if (hiddenWidgets["folder"]) folderInput.value = hiddenWidgets["folder"].value || "";
+        if (hiddenWidgets["filename_prefix"]) prefixInput.value = hiddenWidgets["filename_prefix"].value || "";
+    }
+    folderInput.addEventListener("change", () => {
+        if (hiddenWidgets["folder"]) hiddenWidgets["folder"].value = folderInput.value;
+    });
+    prefixInput.addEventListener("change", () => {
+        if (hiddenWidgets["filename_prefix"]) hiddenWidgets["filename_prefix"].value = prefixInput.value;
+    });
+    folderInput.addEventListener("keydown", (e) => e.stopPropagation());
+    prefixInput.addEventListener("keydown", (e) => e.stopPropagation());
+
+    setTimeout(initInputs, 100);
+
+    return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput };
 }
 
 // Global widget reference
@@ -527,12 +746,24 @@ app.registerExtension({
     name: "vewd",
 
     async setup() {
+        let lastSeed = null;
+
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
             console.log("[Vewd] executed event:", detail?.node, detail?.output);
 
             const output = detail?.output;
+
+            // Track seed from KSampler nodes
+            const nodeId = detail?.node;
+            if (nodeId) {
+                const graphNode = app.graph.getNodeById(Number(nodeId));
+                if (graphNode) {
+                    const seedWidget = graphNode.widgets?.find(w => w.name === "seed");
+                    if (seedWidget) lastSeed = String(seedWidget.value);
+                }
+            }
 
             // Handle images
             if (output?.images) {
@@ -542,7 +773,7 @@ app.registerExtension({
                     seenImages.add(key);
 
                     const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, img.filename, "image", { subfolder: img.subfolder || "", type: img.type || "temp" });
+                    globalVewdWidget.addMedia(src, img.filename, "image", { subfolder: img.subfolder || "", type: img.type || "temp", seed: lastSeed });
                 });
             }
 
@@ -591,6 +822,9 @@ app.registerExtension({
                     console.log("[Vewd] Unknown output key:", key, output[key]);
                 }
             });
+
+            // Auto-export hearted images after each generation
+            globalVewdWidget.autoExportTagged();
         });
     },
 
@@ -606,6 +840,40 @@ app.registerExtension({
             hideOnZoom: false,
         });
 
-        node.setSize([400, 450]);
+        // Hide default widgets — folder path stretches the node too wide
+        // Store refs then remove from widgets array so LiteGraph won't render them
+        const hiddenWidgets = {};
+        if (node.widgets) {
+            for (let i = node.widgets.length - 1; i >= 0; i--) {
+                const w = node.widgets[i];
+                if (w.name === "folder" || w.name === "filename_prefix") {
+                    hiddenWidgets[w.name] = w;
+                    node.widgets.splice(i, 1);
+                }
+            }
+        }
+        // Re-add for serialization
+        const origSerialize = node.serializeWidgets?.bind(node);
+        node.onSerialize = function(o) {
+            if (!o.widgets_values) o.widgets_values = [];
+            o.widgets_values.push(hiddenWidgets["folder"]?.value || "");
+            o.widgets_values.push(hiddenWidgets["filename_prefix"]?.value || "");
+        };
+        node.onConfigure = function(info) {
+            const vals = info.widgets_values || [];
+            // Hidden widget values are at the end
+            const numVisible = node.widgets?.length || 0;
+            if (hiddenWidgets["folder"] && vals.length > numVisible) {
+                hiddenWidgets["folder"].value = vals[numVisible] || "";
+            }
+            if (hiddenWidgets["filename_prefix"] && vals.length > numVisible + 1) {
+                hiddenWidgets["filename_prefix"].value = vals[numVisible + 1] || "";
+            }
+            // Sync to our inputs
+            if (hiddenWidgets["folder"]) widget.folderInput.value = hiddenWidgets["folder"].value;
+            if (hiddenWidgets["filename_prefix"]) widget.prefixInput.value = hiddenWidgets["filename_prefix"].value;
+        };
+
+        node.setSize([500, 550]);
     }
 });
