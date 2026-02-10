@@ -226,14 +226,14 @@ function createVewdWidget(node) {
             <span class="count">0</span>
             <span class="tagged-count">0 tagged</span>
             <div class="vewd-filters">
-                <button class="type-filter active" data-type="all">All</button>
-                <button class="type-filter" data-type="image">Img</button>
-                <button class="type-filter" data-type="video">Vid</button>
-                <button class="type-filter" data-type="audio">Aud</button>
+                <button class="type-filter active" data-type="all">all</button>
+                <button class="type-filter" data-type="image">img</button>
+                <button class="type-filter" data-type="video">vid</button>
+                <button class="type-filter" data-type="audio">aud</button>
             </div>
             <button class="filter-btn">❤</button>
-            <button class="clear-btn">Clear</button>
-            <button class="export-btn">Export Selects</button>
+            <button class="clear-btn">clear</button>
+            <button class="export-btn">export</button>
             <span style="margin-left:auto;color:#444">spacebar ❤ | esc exit</span>
         </div>
     `;
@@ -355,7 +355,7 @@ function createVewdWidget(node) {
 
         const exportCount = state.tagged.size > 0 ? state.tagged.size : state.selected.size;
         exportBtn.classList.toggle("active", exportCount > 0);
-        exportBtn.textContent = exportCount > 0 ? `Export (${exportCount})` : "Export";
+        exportBtn.textContent = exportCount > 0 ? `export (${exportCount})` : "export";
     }
 
     function navigate(d) {
