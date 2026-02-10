@@ -173,6 +173,7 @@ function createVewdWidget(node) {
     const exportBtn = el.querySelector(".export-btn");
     const fullscreenBtn = el.querySelector(".fullscreen-btn");
     let isFullscreen = false;
+    let originalParent = null;
 
     function addImage(src, filename) {
         const i = state.images.length;
@@ -269,13 +270,16 @@ function createVewdWidget(node) {
     function toggleFullscreen() {
         isFullscreen = !isFullscreen;
         if (isFullscreen) {
+            originalParent = el.parentElement;
             document.body.appendChild(el);
             el.classList.add("vewd-fullscreen");
             fullscreenBtn.textContent = "✕";
         } else {
             el.classList.remove("vewd-fullscreen");
             fullscreenBtn.textContent = "⛶";
-            // Widget will be re-added by ComfyUI
+            if (originalParent) {
+                originalParent.appendChild(el);
+            }
         }
         el.focus();
     }
