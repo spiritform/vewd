@@ -367,9 +367,8 @@ function createVewdWidget(node) {
     return { el, addImage, state };
 }
 
-// Global widget reference for capture mode
+// Global widget reference
 let globalVewdWidget = null;
-let captureMode = false;
 
 // Register
 app.registerExtension({
@@ -378,7 +377,7 @@ app.registerExtension({
     async setup() {
         // Hook into all node executions to capture images
         api.addEventListener("executed", ({ detail }) => {
-            if (!captureMode || !globalVewdWidget) return;
+            if (!globalVewdWidget) return;
 
             const output = detail?.output;
             if (output?.images) {
@@ -401,22 +400,6 @@ app.registerExtension({
             serialize: false,
             hideOnZoom: false,
         });
-
-        // Add capture toggle
-        node.addWidget("toggle", "capture_all", false, (v) => {
-            captureMode = v;
-        });
-
-        const orig = node.onExecuted;
-        node.onExecuted = function(output) {
-            if (orig) orig.call(this, output);
-            if (output?.vewd_images) {
-                output.vewd_images.forEach(img => {
-                    const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
-                    widget.addImage(src, img.filename);
-                });
-            }
-        };
 
         node.setSize([400, 450]);
     }
