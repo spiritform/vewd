@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Image Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #111;
+            color: #888;
+            font-family: system-ui, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #toolbar {
+            padding: 10px 15px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        #toolbar span {
+            color: #555;
+        }
+
+        #toolbar button {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #888;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        #toolbar button:hover {
+            background: #333;
+            color: #aaa;
+        }
+
+        #folder-name {
+            color: #666;
+            font-size: 12px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #status {
+            margin-left: auto;
+        }
+
+        #main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        #grid-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        #grid-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #grid-container::-webkit-scrollbar-track {
+            background: #111;
+        }
+
+        #grid-container::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        #grid-container::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .thumb {
+            aspect-ratio: 1;
+            background: #1a1a1a;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            transition: border-color 0.15s, transform 0.15s;
+        }
+
+        .thumb:hover {
+            border-color: #444;
+        }
+
+        .thumb.focused {
+            border-color: #666;
+        }
+
+        .thumb.selected {
+            border-color: #4a9eff;
+        }
+
+        .thumb.focused.selected {
+            border-color: #6bb3ff;
+            box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.3);
+        }
+
+        .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #0a0a0a;
+        }
+
+        .thumb .index {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            color: #666;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .thumb .tag {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #4a9eff;
+            color: #fff;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .thumb.tagged .tag {
+            display: flex;
+        }
+
+        .thumb.tagged {
+            box-shadow: 0 0 0 1px #4a9eff inset;
+        }
+
+        .thumb.hidden {
+            display: none;
+        }
+
+        #compare {
+            width: 50%;
+            background: #0a0a0a;
+            border-left: 1px solid #333;
+            display: none;
+            flex-direction: column;
+        }
+
+        #compare.visible {
+            display: flex;
+        }
+
+        #compare-images {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        #compare-images.single-view {
+            justify-content: center;
+        }
+
+        #compare-images.single-view .compare-pane:nth-child(2) {
+            display: none;
+        }
+
+        .compare-pane {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            position: relative;
+        }
+
+        .compare-pane + .compare-pane {
+            border-left: 1px solid #333;
+        }
+
+        .compare-pane img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .compare-pane .label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #888;
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        #drop-hint {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-size: 20px;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        #drop-hint.hidden {
+            display: none;
+        }
+
+        .drag-over #drop-hint {
+            color: #555;
+        }
+
+        .drag-over #grid-container {
+            background: #1a1a1a;
+        }
+
+        #help {
+            position: fixed;
+            bottom: 10px;
+            left: 15px;
+            font-size: 11px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button id="open-folder">Open Folder</button>
+        <button id="refresh" style="display:none">Refresh</button>
+        <span id="folder-name"></span>
+        <span>Images: <span id="count">0</span></span>
+        <span>Tagged: <span id="tagged-count">0</span></span>
+        <button id="toggle-filter">Show Tagged</button>
+        <span id="status"></span>
+    </div>
+
+    <div id="main">
+        <div id="grid-container">
+            <div id="grid"></div>
+        </div>
+        <div id="compare">
+            <div id="compare-images">
+                <div class="compare-pane" id="pane1"><span class="label">1</span></div>
+                <div class="compare-pane" id="pane2"><span class="label">2</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="drop-hint">Drop images here</div>
+    <div id="help">
+        Arrows: navigate • Space: tag • T: filter tagged • S: save tagged • Del: remove • R: refresh
+    </div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const compare = document.getElementById('compare');
+        const pane1 = document.getElementById('pane1');
+        const pane2 = document.getElementById('pane2');
+        const dropHint = document.getElementById('drop-hint');
+        const countEl = document.getElementById('count');
+        const selectedCountEl = document.getElementById('selected-count');
+        const statusEl = document.getElementById('status');
+
+        let images = []; // { src, element, tagged }
+        let focusIndex = -1;
+        let selectedIndices = new Set();
+        let folderHandle = null;
+        let loadedFiles = new Set();
+        let showOnlyTagged = false;
+        const taggedCountEl = document.getElementById('tagged-count');
+        const toggleFilterBtn = document.getElementById('toggle-filter');
+
+        // Drag and drop
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            document.body.classList.add('drag-over');
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            if (!e.relatedTarget) document.body.classList.remove('drag-over');
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            document.body.classList.remove('drag-over');
+
+            const files = Array.from(e.dataTransfer.files)
+                .filter(f => f.type.startsWith('image/'))
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (ev) => addImage(ev.target.result, file.name);
+                reader.readAsDataURL(file);
+            });
+        });
+
+        // Paste
+        document.addEventListener('paste', (e) => {
+            const items = Array.from(e.clipboardData.items);
+            items.forEach(item => {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (ev) => addImage(ev.target.result, 'pasted');
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+
+        function addImage(src, name) {
+            const index = images.length;
+
+            const thumb = document.createElement('div');
+            thumb.className = 'thumb';
+            thumb.dataset.index = index;
+
+            const img = document.createElement('img');
+            img.src = src;
+            img.title = name;
+
+            const indexLabel = document.createElement('div');
+            indexLabel.className = 'index';
+            indexLabel.textContent = index + 1;
+
+            const tagIndicator = document.createElement('div');
+            tagIndicator.className = 'tag';
+            tagIndicator.textContent = '✓';
+
+            thumb.appendChild(img);
+            thumb.appendChild(indexLabel);
+            thumb.appendChild(tagIndicator);
+            grid.appendChild(thumb);
+
+            images.push({ src, name, element: thumb, tagged: false });
+
+            thumb.addEventListener('click', (e) => {
+                const idx = parseInt(thumb.dataset.index);
+                handleClick(idx, e);
+            });
+
+            updateUI();
+
+            if (focusIndex === -1) {
+                setFocus(0);
+            }
+        }
+
+        function handleClick(index, e) {
+            if (e.ctrlKey || e.metaKey) {
+                // Toggle selection
+                if (selectedIndices.has(index)) {
+                    selectedIndices.delete(index);
+                } else {
+                    selectedIndices.add(index);
+                }
+            } else if (e.shiftKey && focusIndex !== -1) {
+                // Range select
+                const start = Math.min(focusIndex, index);
+                const end = Math.max(focusIndex, index);
+                if (!e.ctrlKey) selectedIndices.clear();
+                for (let i = start; i <= end; i++) {
+                    selectedIndices.add(i);
+                }
+            } else {
+                // Single select
+                selectedIndices.clear();
+                selectedIndices.add(index);
+            }
+
+            setFocus(index);
+            updateUI();
+        }
+
+        function setFocus(index) {
+            if (index < 0 || index >= images.length) return;
+
+            if (focusIndex >= 0 && images[focusIndex]) {
+                images[focusIndex].element.classList.remove('focused');
+            }
+
+            focusIndex = index;
+            images[focusIndex].element.classList.add('focused');
+            images[focusIndex].element.scrollIntoView({ block: 'nearest' });
+        }
+
+        function updateUI() {
+            // Update selection visuals and filter
+            let taggedCount = 0;
+            images.forEach((img, i) => {
+                img.element.classList.toggle('selected', selectedIndices.has(i));
+                if (img.tagged) taggedCount++;
+
+                // Filter visibility
+                if (showOnlyTagged) {
+                    img.element.classList.toggle('hidden', !img.tagged);
+                } else {
+                    img.element.classList.remove('hidden');
+                }
+            });
+
+            // Update counts
+            countEl.textContent = images.length;
+            taggedCountEl.textContent = taggedCount;
+
+            // Update filter button
+            toggleFilterBtn.textContent = showOnlyTagged ? 'Show All' : 'Show Tagged';
+            toggleFilterBtn.style.background = showOnlyTagged ? '#4a9eff' : '';
+            toggleFilterBtn.style.color = showOnlyTagged ? '#fff' : '';
+
+            // Update hint
+            dropHint.classList.toggle('hidden', images.length > 0);
+
+            // Update compare view
+            updateCompare();
+        }
+
+        function updateCompare() {
+            const selected = Array.from(selectedIndices).sort((a, b) => a - b);
+            const compareImages = document.getElementById('compare-images');
+
+            if (selected.length >= 2) {
+                compare.classList.add('visible');
+                compareImages.classList.remove('single-view');
+
+                pane1.innerHTML = `<span class="label">${selected[0] + 1}</span><img src="${images[selected[0]].src}">`;
+                pane2.innerHTML = `<span class="label">${selected[1] + 1}</span><img src="${images[selected[1]].src}">`;
+            } else if (selected.length === 1) {
+                compare.classList.add('visible');
+                compareImages.classList.add('single-view');
+
+                pane1.innerHTML = `<span class="label">${selected[0] + 1}</span><img src="${images[selected[0]].src}">`;
+                pane2.innerHTML = '';
+            } else {
+                compare.classList.remove('visible');
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (images.length === 0) return;
+
+            const cols = 3;
+
+            switch (e.key) {
+                case 'ArrowRight':
+                    e.preventDefault();
+                    navigateTo(focusIndex + 1, e);
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    navigateTo(focusIndex - 1, e);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    navigateTo(focusIndex + cols, e);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    navigateTo(focusIndex - cols, e);
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    navigateTo(0, e);
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    navigateTo(images.length - 1, e);
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    toggleTag(focusIndex);
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    e.preventDefault();
+                    deleteSelected();
+                    break;
+                case 'a':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        selectAll();
+                    }
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    selectedIndices.clear();
+                    compare.classList.remove('visible');
+                    updateUI();
+                    break;
+                case 'r':
+                    if (!e.ctrlKey && !e.metaKey && folderHandle) {
+                        e.preventDefault();
+                        loadFromFolder();
+                    }
+                    break;
+                case 'F5':
+                    if (folderHandle) {
+                        e.preventDefault();
+                        loadFromFolder();
+                    }
+                    break;
+                case 't':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        showOnlyTagged = !showOnlyTagged;
+                        updateUI();
+                    }
+                    break;
+                case 's':
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        saveTaggedImages();
+                    }
+                    break;
+            }
+        });
+
+        function navigateTo(index, e) {
+            index = Math.max(0, Math.min(images.length - 1, index));
+
+            if (e.shiftKey) {
+                // Extend selection
+                if (!selectedIndices.has(focusIndex)) {
+                    selectedIndices.add(focusIndex);
+                }
+                selectedIndices.add(index);
+            } else if (!e.ctrlKey) {
+                selectedIndices.clear();
+                selectedIndices.add(index);
+            }
+
+            setFocus(index);
+            updateUI();
+        }
+
+        function toggleTag(index) {
+            if (index < 0 || index >= images.length) return;
+            images[index].tagged = !images[index].tagged;
+            images[index].element.classList.toggle('tagged', images[index].tagged);
+            updateUI();
+        }
+
+        function selectAll() {
+            images.forEach((_, i) => selectedIndices.add(i));
+            updateUI();
+        }
+
+        function deleteSelected() {
+            if (selectedIndices.size === 0) return;
+
+            const toDelete = Array.from(selectedIndices).sort((a, b) => b - a);
+
+            toDelete.forEach(i => {
+                images[i].element.remove();
+                images.splice(i, 1);
+            });
+
+            // Reindex
+            images.forEach((img, i) => {
+                img.element.dataset.index = i;
+                img.element.querySelector('.index').textContent = i + 1;
+            });
+
+            selectedIndices.clear();
+
+            // Adjust focus
+            if (images.length > 0) {
+                const newFocus = Math.min(focusIndex, images.length - 1);
+                focusIndex = -1;
+                setFocus(newFocus);
+                selectedIndices.add(newFocus);
+            } else {
+                focusIndex = -1;
+            }
+
+            updateUI();
+        }
+
+        // Folder loading (File System Access API)
+        const openFolderBtn = document.getElementById('open-folder');
+        const refreshBtn = document.getElementById('refresh');
+        const folderNameEl = document.getElementById('folder-name');
+        const DB_NAME = 'ImageViewerDB';
+        const STORE_NAME = 'folders';
+
+        // IndexedDB helpers
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (e) => {
+                    e.target.result.createObjectStore(STORE_NAME);
+                };
+            });
+        }
+
+        async function saveFolderHandle(handle) {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(handle, 'lastFolder');
+            return tx.complete;
+        }
+
+        async function getSavedFolderHandle() {
+            const db = await openDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const request = tx.objectStore(STORE_NAME).get('lastFolder');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => resolve(null);
+            });
+        }
+
+        // Try to restore last folder on load
+        (async () => {
+            try {
+                const savedHandle = await getSavedFolderHandle();
+                if (savedHandle) {
+                    const permission = await savedHandle.requestPermission({ mode: 'readwrite' });
+                    if (permission === 'granted') {
+                        folderHandle = savedHandle;
+                        folderNameEl.textContent = folderHandle.name;
+                        refreshBtn.style.display = 'inline-block';
+                        await loadFromFolder();
+                    }
+                }
+            } catch (e) {
+                console.log('Could not restore folder:', e);
+            }
+        })();
+
+        openFolderBtn.addEventListener('click', async () => {
+            try {
+                folderHandle = await window.showDirectoryPicker();
+                folderNameEl.textContent = folderHandle.name;
+                refreshBtn.style.display = 'inline-block';
+                await saveFolderHandle(folderHandle);
+                await loadFromFolder();
+            } catch (e) {
+                if (e.name !== 'AbortError') console.error(e);
+            }
+        });
+
+        refreshBtn.addEventListener('click', () => loadFromFolder());
+
+        toggleFilterBtn.addEventListener('click', () => {
+            showOnlyTagged = !showOnlyTagged;
+            updateUI();
+        });
+
+        async function loadFromFolder() {
+            if (!folderHandle) return;
+
+            const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
+            const entries = [];
+
+            for await (const entry of folderHandle.values()) {
+                if (entry.kind === 'file') {
+                    const name = entry.name.toLowerCase();
+                    if (imageExtensions.some(ext => name.endsWith(ext))) {
+                        entries.push(entry);
+                    }
+                }
+            }
+
+            // Sort by name
+            entries.sort((a, b) => a.name.localeCompare(b.name));
+
+            for (const entry of entries) {
+                if (loadedFiles.has(entry.name)) continue;
+
+                try {
+                    const file = await entry.getFile();
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        addImage(ev.target.result, entry.name);
+                        loadedFiles.add(entry.name);
+                    };
+                    reader.readAsDataURL(file);
+                } catch (e) {
+                    console.error('Failed to load:', entry.name, e);
+                }
+            }
+        }
+
+        async function saveTaggedImages() {
+            const tagged = images.filter(img => img.tagged);
+            if (tagged.length === 0) {
+                statusEl.textContent = 'No tagged images';
+                setTimeout(() => statusEl.textContent = '', 2000);
+                return;
+            }
+
+            if (!folderHandle) {
+                statusEl.textContent = 'Open a folder first';
+                setTimeout(() => statusEl.textContent = '', 2000);
+                return;
+            }
+
+            // Request write permission if needed
+            const perm = await folderHandle.requestPermission({ mode: 'readwrite' });
+            if (perm !== 'granted') {
+                statusEl.textContent = 'Write permission denied';
+                setTimeout(() => statusEl.textContent = '', 2000);
+                return;
+            }
+
+            statusEl.textContent = 'Saving...';
+
+            let saved = 0;
+            for (let i = 0; i < tagged.length; i++) {
+                const img = tagged[i];
+                const num = String(i + 1).padStart(2, '0');
+
+                // Parse original filename
+                const lastDot = img.name.lastIndexOf('.');
+                const baseName = lastDot > 0 ? img.name.substring(0, lastDot) : img.name;
+                const ext = lastDot > 0 ? img.name.substring(lastDot) : '.png';
+                const newName = `${baseName}_select${num}${ext}`;
+
+                try {
+                    // Convert dataURL to blob
+                    const response = await fetch(img.src);
+                    const blob = await response.blob();
+
+                    // Write to folder
+                    const fileHandle = await folderHandle.getFileHandle(newName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    saved++;
+                } catch (e) {
+                    console.error('Failed to save:', newName, e);
+                }
+            }
+
+            statusEl.textContent = `Saved ${saved} images`;
+            setTimeout(() => statusEl.textContent = '', 3000);
+        }
+
+        // Focus grid on load
+        document.getElementById('grid-container').focus();
+    </script>
+</body>
+</html>
