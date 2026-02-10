@@ -178,19 +178,36 @@ function createVewdWidget(node) {
     let originalParent = null;
 
     function addImage(src, filename) {
-        const i = state.images.length;
         const item = document.createElement("div");
         item.className = "vewd-item";
         item.innerHTML = `<img src="${src}">`;
-        item.onclick = (e) => handleClick(i, e);
         item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
-        grid.appendChild(item);
-        state.images.push({ src, filename, el: item });
 
-        if (state.focusIndex === -1) {
-            state.focusIndex = 0;
-            state.selected.add(0);
-        }
+        // Add to beginning
+        grid.insertBefore(item, grid.firstChild);
+        state.images.unshift({ src, filename, el: item });
+
+        // Update click handlers with correct indices
+        state.images.forEach((img, idx) => {
+            img.el.onclick = (e) => handleClick(idx, e);
+        });
+
+        // Shift tagged/selected indices
+        const newTagged = new Set();
+        state.tagged.forEach(i => newTagged.add(i + 1));
+        state.tagged = newTagged;
+
+        const newSelected = new Set();
+        state.selected.forEach(i => newSelected.add(i + 1));
+        state.selected = newSelected;
+
+        if (state.focusIndex >= 0) state.focusIndex++;
+
+        // Select new image
+        state.selected.clear();
+        state.selected.add(0);
+        state.focusIndex = 0;
+
         update();
     }
 
