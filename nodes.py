@@ -1,4 +1,5 @@
 import shutil
+import numpy as np
 from pathlib import Path
 from PIL import Image, PngImagePlugin
 import folder_paths
@@ -34,6 +35,7 @@ class Vewd:
         return {
             "required": {},
             "optional": {
+                "images": ("IMAGE",),
                 "folder": ("STRING", {"default": "C:/AI/comfy/ComfyUI/output/vewd"}),
                 "filename_prefix": ("STRING", {"default": "vewd"}),
             },
@@ -48,9 +50,23 @@ class Vewd:
     CATEGORY = "image"
     OUTPUT_NODE = True
 
-    def process(self, folder="", filename_prefix="vewd", prompt=None, extra_pnginfo=None):
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return float("nan")
+
+    def process(self, images=None, folder="", filename_prefix="vewd", prompt=None, extra_pnginfo=None):
         folder = folder.strip('"')
-        # Node just exists for the UI widget - capture mode handles image collection
+        if images is not None:
+            results = []
+            temp_dir = folder_paths.get_temp_directory()
+            for i, image in enumerate(images):
+                img_array = (image.cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
+                img = Image.fromarray(img_array)
+                filename = f"vewd_{filename_prefix}_{i + 1:05d}_.png"
+                filepath = Path(temp_dir) / filename
+                img.save(filepath)
+                results.append({"filename": filename, "subfolder": "", "type": "temp"})
+            return {"ui": {"images": results}}
         return {"ui": {"vewd_images": []}}
 
 
