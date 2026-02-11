@@ -61,14 +61,14 @@ style.textContent = `
     .vewd-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 4px;
+        gap: 6px;
     }
 
     .vewd-item {
         aspect-ratio: 1;
         background: #0a0a0a;
-        border: 1px solid transparent;
-        border-radius: 3px;
+        border: 2px solid transparent;
+        border-radius: 4px;
         overflow: hidden;
         cursor: pointer;
         position: relative;
@@ -663,20 +663,26 @@ function createVewdWidget(node) {
                 e.stopPropagation();
                 {
                     // If a compare pane is active, heart that image
-                    let tagIdx = -1;
                     if (activePaneIndex >= 0) {
                         const sel = [...state.selected].sort((a, b) => a - b);
                         if (sel.length >= 2 && activePaneIndex < 2) {
-                            tagIdx = sel[activePaneIndex];
+                            const tagIdx = sel[activePaneIndex];
+                            state.tagged.has(tagIdx) ? state.tagged.delete(tagIdx) : state.tagged.add(tagIdx);
                         }
-                    } else {
-                        tagIdx = state.focusIndex;
+                    } else if (state.selected.size > 1) {
+                        // Multi-select: if any are hearted, unheart all; otherwise heart all
+                        const anyTagged = [...state.selected].some(i => state.tagged.has(i));
+                        state.selected.forEach(i => {
+                            anyTagged ? state.tagged.delete(i) : state.tagged.add(i);
+                        });
+                    } else if (state.focusIndex >= 0) {
+                        state.tagged.has(state.focusIndex)
+                            ? state.tagged.delete(state.focusIndex)
+                            : state.tagged.add(state.focusIndex);
                     }
-                    if (tagIdx >= 0) {
-                        state.tagged.has(tagIdx)
-                            ? state.tagged.delete(tagIdx)
-                            : state.tagged.add(tagIdx);
-                        update();
+                    update();
+                    if (state.autoExport && state.tagged.size > 0) {
+                        autoExportTagged();
                     }
                 }
                 break;
@@ -718,21 +724,8 @@ function createVewdWidget(node) {
     fullscreenBtn.onclick = toggleFullscreen;
     logoBtn.onclick = () => window.open("https://x.com/spiritform", "_blank");
 
-    // Sync folder/prefix inputs with hidden ComfyUI widgets
-    function initInputs() {
-        if (hiddenWidgets["folder"]) folderInput.value = hiddenWidgets["folder"].value || "";
-        if (hiddenWidgets["filename_prefix"]) prefixInput.value = hiddenWidgets["filename_prefix"].value || "";
-    }
-    folderInput.addEventListener("change", () => {
-        if (hiddenWidgets["folder"]) hiddenWidgets["folder"].value = folderInput.value;
-    });
-    prefixInput.addEventListener("change", () => {
-        if (hiddenWidgets["filename_prefix"]) hiddenWidgets["filename_prefix"].value = prefixInput.value;
-    });
     folderInput.addEventListener("keydown", (e) => e.stopPropagation());
     prefixInput.addEventListener("keydown", (e) => e.stopPropagation());
-
-    setTimeout(initInputs, 100);
 
     return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput };
 }
@@ -751,18 +744,20 @@ app.registerExtension({
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
-            console.log("[Vewd] executed event:", detail?.node, detail?.output);
-
             const output = detail?.output;
 
-            // Track seed from KSampler nodes
-            const nodeId = detail?.node;
-            if (nodeId) {
-                const graphNode = app.graph.getNodeById(Number(nodeId));
-                if (graphNode) {
-                    const seedWidget = graphNode.widgets?.find(w => w.name === "seed");
-                    if (seedWidget) lastSeed = String(seedWidget.value);
+            // Capture seed: walk all graph nodes, match "seed" or "123: seed" (subgraph prefix)
+            try {
+                const nodes = app.graph._nodes || [];
+                for (const n of nodes) {
+                    const sw = n.widgets?.find(w => w.name === "seed" || w.name.endsWith(": seed"));
+                    if (sw && sw.value != null) {
+                        lastSeed = String(sw.value);
+                        break;
+                    }
                 }
+            } catch (e) {
+                console.warn("[Vewd] seed search error:", e);
             }
 
             // Handle images
@@ -852,27 +847,25 @@ app.registerExtension({
                 }
             }
         }
-        // Re-add for serialization
-        const origSerialize = node.serializeWidgets?.bind(node);
-        node.onSerialize = function(o) {
-            if (!o.widgets_values) o.widgets_values = [];
-            o.widgets_values.push(hiddenWidgets["folder"]?.value || "");
-            o.widgets_values.push(hiddenWidgets["filename_prefix"]?.value || "");
-        };
-        node.onConfigure = function(info) {
-            const vals = info.widgets_values || [];
-            // Hidden widget values are at the end
-            const numVisible = node.widgets?.length || 0;
-            if (hiddenWidgets["folder"] && vals.length > numVisible) {
-                hiddenWidgets["folder"].value = vals[numVisible] || "";
-            }
-            if (hiddenWidgets["filename_prefix"] && vals.length > numVisible + 1) {
-                hiddenWidgets["filename_prefix"].value = vals[numVisible + 1] || "";
-            }
-            // Sync to our inputs
-            if (hiddenWidgets["folder"]) widget.folderInput.value = hiddenWidgets["folder"].value;
-            if (hiddenWidgets["filename_prefix"]) widget.prefixInput.value = hiddenWidgets["filename_prefix"].value;
-        };
+        // Persist folder/prefix via localStorage (keyed per node ID)
+        const storageKey = `vewd_${node.id}`;
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+
+        // Restore saved values (or fall back to hidden widget defaults)
+        widget.folderInput.value = saved.folder ?? hiddenWidgets["folder"]?.value ?? "";
+        widget.prefixInput.value = saved.prefix ?? hiddenWidgets["filename_prefix"]?.value ?? "";
+
+        function persist() {
+            localStorage.setItem(storageKey, JSON.stringify({
+                folder: widget.folderInput.value,
+                prefix: widget.prefixInput.value
+            }));
+            // Also sync to hidden widgets for the backend
+            if (hiddenWidgets["folder"]) hiddenWidgets["folder"].value = widget.folderInput.value;
+            if (hiddenWidgets["filename_prefix"]) hiddenWidgets["filename_prefix"].value = widget.prefixInput.value;
+        }
+        widget.folderInput.addEventListener("input", persist);
+        widget.prefixInput.addEventListener("input", persist);
 
         node.setSize([500, 550]);
     }

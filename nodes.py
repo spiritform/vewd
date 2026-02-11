@@ -98,9 +98,11 @@ async def export_selects(request):
                 tried.append(str(src_path))
 
             if src_path.exists():
-                # New name with user's prefix
-                seed_part = f"_{seed}" if seed else ""
-                new_name = f"{prefix}_select{i + 1:02d}{seed_part}.png"
+                if seed:
+                    new_name = f"{prefix}_{seed}_{i + 1:03d}.png"
+                else:
+                    orig_stem = Path(filename).stem
+                    new_name = f"{prefix}_{orig_stem}.png"
                 dst_path = selects_dir / new_name
                 copy_with_metadata(src_path, dst_path, seed)
                 count += 1
@@ -133,15 +135,15 @@ async def save_images(request):
         input_dir = folder_paths.get_input_directory()
         count = 0
 
-        # Find next available number
-        existing = list(save_dir.glob(f"{prefix}_*.png"))
-        start_num = len(existing) + 1
+        # Find next available number per seed
+        seed_counters = {}
 
         for i, img_info in enumerate(images):
             if isinstance(img_info, str):
                 filename = img_info
                 subfolder = ""
                 source_type = "temp"
+                seed = None
             else:
                 filename = img_info.get("filename", "")
                 subfolder = img_info.get("subfolder", "")
@@ -155,8 +157,17 @@ async def save_images(request):
                 src_path = Path(folder) / filename
 
             if src_path.exists():
-                seed_part = f"_{seed}" if seed else ""
-                new_name = f"{prefix}_{start_num + i:03d}{seed_part}.png"
+                if seed:
+                    # With seed: prefix_seed_001.png
+                    seed_key = seed
+                    if seed_key not in seed_counters:
+                        seed_counters[seed_key] = len(list(save_dir.glob(f"{prefix}_{seed}_*.png")))
+                    seed_counters[seed_key] += 1
+                    new_name = f"{prefix}_{seed}_{seed_counters[seed_key]:03d}.png"
+                else:
+                    # No seed: use original ComfyUI filename — prefix_ComfyUI_temp_xxx_00001_.png
+                    orig_stem = Path(filename).stem
+                    new_name = f"{prefix}_{orig_stem}.png"
                 dst_path = save_dir / new_name
                 copy_with_metadata(src_path, dst_path, seed)
                 count += 1
