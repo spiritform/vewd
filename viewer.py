@@ -158,72 +158,76 @@ HTML = '''<!DOCTYPE html>
             flex-direction: column;
             overflow: hidden;
         }
-        #toolbar {
-            padding: 10px 15px;
-            background: #1a1a1a;
-            border-bottom: 1px solid #333;
+        .vewd-header {
             display: flex;
-            gap: 20px;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #222;
             align-items: center;
             font-size: 13px;
+            color: #555;
         }
-        #toolbar span { color: #555; }
-        #toolbar button {
-            background: #2a2a2a;
-            border: 1px solid #444;
-            color: #888;
-            padding: 4px 10px;
+        .vewd-header button {
+            background: #252525;
+            border: none;
+            color: #777;
+            padding: 4px 8px;
             border-radius: 3px;
             cursor: pointer;
             font-size: 12px;
+            font-family: inherit;
+            line-height: 1.3;
         }
-        #toolbar button:hover { background: #333; color: #aaa; }
+        .vewd-header button:hover { background: #333; color: #aaa; }
         #folder-path {
             color: #555;
-            font-size: 11px;
-            max-width: 300px;
+            font-size: 12px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            min-width: 0;
         }
-        #status { margin-left: auto; color: #666; }
         #main { flex: 1; display: flex; overflow: hidden; }
         #grid-container {
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
+            padding: 6px;
+            background: #151515;
         }
-        #grid-container::-webkit-scrollbar { width: 8px; }
-        #grid-container::-webkit-scrollbar-track { background: #111; }
-        #grid-container::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        #grid-container::-webkit-scrollbar-thumb:hover { background: #444; }
+        #grid-container::-webkit-scrollbar { width: 5px; }
+        #grid-container::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
         #grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+            gap: 6px;
         }
         .thumb {
             aspect-ratio: 1;
-            background: #1a1a1a;
+            background: #0a0a0a;
             border: 2px solid transparent;
             border-radius: 4px;
             overflow: hidden;
             cursor: pointer;
             position: relative;
-            transition: border-color 0.15s;
+            transition: border-color 0.15s ease;
         }
-        .thumb:hover { border-color: #444; }
-        .thumb.focused { border-color: #666; }
-        .thumb.selected { border-color: #4a9eff; }
-        .thumb.focused.selected {
-            border-color: #6bb3ff;
-            box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.3);
+        .thumb:hover { border-color: #666; }
+        .thumb.selected { border-color: #fff; }
+        .thumb.tagged::after {
+            content: "\2764";
+            position: absolute;
+            top: 3px;
+            right: 4px;
+            color: #ff4a6a;
+            font-size: 14px;
+            text-shadow: 0 0 2px rgba(0,0,0,0.8);
         }
+        .thumb.hidden { display: none; }
         .thumb img {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            background: #0a0a0a;
         }
         .thumb .index {
             position: absolute;
@@ -235,23 +239,6 @@ HTML = '''<!DOCTYPE html>
             border-radius: 3px;
             font-size: 11px;
         }
-        .thumb .tag {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: #4a9eff;
-            color: #fff;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-        }
-        .thumb.tagged .tag { display: flex; }
-        .thumb.tagged { box-shadow: 0 0 0 1px #4a9eff inset; }
-        .thumb.hidden { display: none; }
         #compare {
             width: 50%;
             background: #0a0a0a;
@@ -283,22 +270,43 @@ HTML = '''<!DOCTYPE html>
             border-radius: 3px;
             font-size: 12px;
         }
-        #help {
-            position: fixed;
-            bottom: 10px;
-            left: 15px;
-            font-size: 11px;
-            color: #333;
+        .vewd-bar {
+            display: flex;
+            gap: 6px 8px;
+            padding: 10px;
+            background: #1a1a1a;
+            font-size: 14px;
+            color: #555;
+            align-items: center;
+            flex-wrap: wrap;
         }
+        .vewd-bar button {
+            background: #252525;
+            border: none;
+            color: #777;
+            padding: 5px 14px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1.3;
+        }
+        .vewd-bar button:hover { background: #333; color: #aaa; }
+        .vewd-bar button.on { background: #ff4a6a; color: #fff; }
+        .vewd-bar .save-btn { background: #1a1a1a; color: #333; pointer-events: none; }
+        .vewd-bar .save-btn.active { background: #252525; color: #777; pointer-events: auto; }
+        .vewd-bar .save-btn.active:hover { background: #333; color: #aaa; }
+        .vewd-bar .vewd-logo {
+            color: #fff !important;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .vewd-bar .vewd-logo:hover { background: #fff !important; color: #111 !important; }
     </style>
 </head>
 <body>
-    <div id="toolbar">
-        <button id="pick-folder">Folder</button>
+    <div class="vewd-header">
+        <button id="pick-folder">folder</button>
         <span id="folder-path"></span>
-        <span>Images: <span id="count">0</span></span>
-        <span>Tagged: <span id="tagged-count">0</span></span>
-        <span id="status"></span>
     </div>
     <div id="main">
         <div id="grid-container">
@@ -311,8 +319,15 @@ HTML = '''<!DOCTYPE html>
             </div>
         </div>
     </div>
-    <div id="help">
-        Arrows: navigate • Space: tag • T: filter tagged • S: save tagged • Del: remove
+    <div class="vewd-bar">
+        <span id="count">0</span>
+        <button id="filter-btn">&#10084;</button>
+        <span id="tagged-count">0</span>
+        <button id="clear-btn">clear</button>
+        <button class="save-btn" id="save-btn">save</button>
+        <span id="status"></span>
+        <span style="margin-left:auto;color:#444">spacebar &#10084;</span>
+        <button class="vewd-logo" id="vewd-logo">vewd</button>
     </div>
 
     <script>
@@ -323,6 +338,10 @@ HTML = '''<!DOCTYPE html>
         const countEl = document.getElementById('count');
         const taggedCountEl = document.getElementById('tagged-count');
         const statusEl = document.getElementById('status');
+        const filterBtn = document.getElementById('filter-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const vewdLogo = document.getElementById('vewd-logo');
 
         let images = [];
         let focusIndex = -1;
@@ -360,13 +379,8 @@ HTML = '''<!DOCTYPE html>
             indexLabel.className = 'index';
             indexLabel.textContent = index + 1;
 
-            const tagIndicator = document.createElement('div');
-            tagIndicator.className = 'tag';
-            tagIndicator.textContent = '✓';
-
             thumb.appendChild(img);
             thumb.appendChild(indexLabel);
-            thumb.appendChild(tagIndicator);
             grid.insertBefore(thumb, grid.firstChild);
 
             images.unshift({ src, name, element: thumb, tagged: false });
@@ -405,11 +419,7 @@ HTML = '''<!DOCTYPE html>
 
         function setFocus(index) {
             if (index < 0 || index >= images.length) return;
-            if (focusIndex >= 0 && images[focusIndex]) {
-                images[focusIndex].element.classList.remove('focused');
-            }
             focusIndex = index;
-            images[focusIndex].element.classList.add('focused');
             images[focusIndex].element.scrollIntoView({ block: 'nearest' });
         }
 
@@ -417,6 +427,7 @@ HTML = '''<!DOCTYPE html>
             let taggedCount = 0;
             images.forEach((img, i) => {
                 img.element.classList.toggle('selected', selectedIndices.has(i));
+                img.element.classList.toggle('tagged', img.tagged);
                 if (img.tagged) taggedCount++;
                 if (showOnlyTagged) {
                     img.element.classList.toggle('hidden', !img.tagged);
@@ -426,6 +437,9 @@ HTML = '''<!DOCTYPE html>
             });
             countEl.textContent = images.length;
             taggedCountEl.textContent = taggedCount;
+            filterBtn.classList.toggle('on', showOnlyTagged);
+            saveBtn.classList.toggle('active', taggedCount > 0);
+            saveBtn.textContent = taggedCount > 0 ? 'save (' + taggedCount + ')' : 'save';
             updateCompare();
         }
 
@@ -451,7 +465,6 @@ HTML = '''<!DOCTYPE html>
         function toggleTag(index) {
             if (index < 0 || index >= images.length) return;
             images[index].tagged = !images[index].tagged;
-            images[index].element.classList.toggle('tagged', images[index].tagged);
             updateUI();
         }
 
@@ -585,6 +598,28 @@ HTML = '''<!DOCTYPE html>
                 statusEl.textContent = 'Failed to pick folder';
                 setTimeout(() => statusEl.textContent = '', 2000);
             }
+        });
+
+        // Bottom bar buttons
+        filterBtn.addEventListener('click', () => {
+            showOnlyTagged = !showOnlyTagged;
+            updateUI();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            grid.innerHTML = '';
+            images = [];
+            knownImages.clear();
+            focusIndex = -1;
+            selectedIndices.clear();
+            compare.classList.remove('visible');
+            updateUI();
+        });
+
+        saveBtn.addEventListener('click', () => saveTagged());
+
+        vewdLogo.addEventListener('click', () => {
+            window.open('https://x.com/spiritform', '_blank');
         });
 
         // Initial load + poll for new images

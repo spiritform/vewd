@@ -60,6 +60,16 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 | Delete | Remove from viewer |
 | Esc | Exit fullscreen |
 
+## Standalone Viewer
+
+Vewd can also be used as a standalone image viewer outside of ComfyUI. Run `viewer.bat` (or `python viewer.py [folder]`) to launch a local browser-based viewer for any folder of images.
+
+```bash
+viewer.bat
+# or
+python viewer.py path/to/images
+```
+
 ## Node Settings
 
 - **folder** - Where to export hearted media (creates `/selects` subfolder)
