@@ -62,10 +62,10 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 
 ## Standalone Viewer
 
-Vewd can also be used as a standalone image viewer outside of ComfyUI. Run `viewer.bat` (or `python viewer.py [folder]`) to launch a local browser-based viewer for any folder of images.
+Vewd can also be used as a standalone image viewer outside of ComfyUI. Run `vewd.bat` (or `python viewer.py [folder]`) to launch a local browser-based viewer for any folder of images.
 
 ```bash
-viewer.bat
+vewd.bat
 # or
 python viewer.py path/to/images
 ```

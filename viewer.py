@@ -17,6 +17,9 @@ from urllib.parse import unquote
 # Config
 PORT = 8000
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}
+VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
+AUDIO_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.flac', '.aac'}
+ALL_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
 
 # Watch folder (mutable)
 watch_folder = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
@@ -55,27 +58,35 @@ class ViewerHandler(SimpleHTTPRequestHandler):
             self.send_error(404)
 
     def get_images(self):
-        images = []
+        items = []
         try:
             for f in sorted(watch_folder.iterdir()):
-                if f.suffix.lower() in IMAGE_EXTENSIONS:
-                    images.append({
+                ext = f.suffix.lower()
+                if ext in ALL_EXTENSIONS:
+                    if ext in IMAGE_EXTENSIONS:
+                        media_type = 'image'
+                    elif ext in VIDEO_EXTENSIONS:
+                        media_type = 'video'
+                    else:
+                        media_type = 'audio'
+                    items.append({
                         'name': f.name,
                         'path': f'/img/{f.name}',
-                        'mtime': f.stat().st_mtime
+                        'mtime': f.stat().st_mtime,
+                        'type': media_type
                     })
-            # Sort by modification time, newest first
-            images.sort(key=lambda x: x['mtime'], reverse=True)
+            items.sort(key=lambda x: x['mtime'], reverse=True)
         except Exception as e:
             print(f"Error reading folder: {e}")
-        return images
+        return items
 
     def serve_image(self):
+        import mimetypes
         name = unquote(self.path[5:])  # Remove '/img/'
         filepath = watch_folder / name
-        if filepath.exists() and filepath.suffix.lower() in IMAGE_EXTENSIONS:
+        if filepath.exists() and filepath.suffix.lower() in ALL_EXTENSIONS:
             self.send_response(200)
-            content_type = 'image/png' if filepath.suffix.lower() == '.png' else 'image/jpeg'
+            content_type = mimetypes.guess_type(filepath.name)[0] or 'application/octet-stream'
             self.send_header('Content-type', content_type)
             self.end_headers()
             with open(filepath, 'rb') as f:
@@ -190,7 +201,7 @@ HTML = '''<!DOCTYPE html>
         }
         #main { flex: 1; display: flex; overflow: hidden; }
         #grid-container {
-            flex: 1;
+            width: 35%;
             overflow-y: auto;
             padding: 6px;
             background: #151515;
@@ -210,7 +221,7 @@ HTML = '''<!DOCTYPE html>
             overflow: hidden;
             cursor: pointer;
             position: relative;
-            transition: border-color 0.15s ease;
+            transition: border-color 0.2s ease;
         }
         .thumb:hover { border-color: #666; }
         .thumb.selected { border-color: #fff; }
@@ -224,10 +235,34 @@ HTML = '''<!DOCTYPE html>
             text-shadow: 0 0 2px rgba(0,0,0,0.8);
         }
         .thumb.hidden { display: none; }
-        .thumb img {
+        .thumb img, .thumb video {
             width: 100%;
             height: 100%;
             object-fit: contain;
+        }
+        .thumb .audio-icon {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #444;
+            background: #1a1a1a;
+        }
+        .thumb .media-icon {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .thumb .index {
             position: absolute;
@@ -240,13 +275,12 @@ HTML = '''<!DOCTYPE html>
             font-size: 11px;
         }
         #compare {
-            width: 50%;
+            flex: 1;
             background: #0a0a0a;
-            border-left: 1px solid #333;
-            display: none;
+            border-left: 1px solid #222;
+            display: flex;
             flex-direction: column;
         }
-        #compare.visible { display: flex; }
         #compare-images { flex: 1; display: flex; overflow: hidden; }
         #compare-images.single-view { justify-content: center; }
         #compare-images.single-view .compare-pane:nth-child(2) { display: none; }
@@ -258,8 +292,29 @@ HTML = '''<!DOCTYPE html>
             padding: 15px;
             position: relative;
         }
-        .compare-pane + .compare-pane { border-left: 1px solid #333; }
-        .compare-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .compare-pane + .compare-pane { border-left: 1px solid #222; }
+        .compare-pane.active-pane { box-shadow: inset 0 0 0 2px #fff; }
+        .compare-pane .pane-heart {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            color: #ff4a6a;
+            font-size: 20px;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8);
+            display: none;
+        }
+        .compare-pane.pane-tagged .pane-heart { display: block; }
+        .compare-pane img, .compare-pane video { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .compare-pane .audio-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            color: #666;
+            width: 100%;
+        }
+        .compare-pane .audio-preview .icon { font-size: 64px; }
+        .compare-pane .audio-preview audio { width: 80%; height: 40px; }
         .compare-pane .label {
             position: absolute;
             top: 10px;
@@ -270,6 +325,21 @@ HTML = '''<!DOCTYPE html>
             border-radius: 3px;
             font-size: 12px;
         }
+        .vewd-filters {
+            display: flex;
+            gap: 6px;
+        }
+        .vewd-filters button {
+            background: transparent;
+            border: 1px solid #333;
+            color: #555;
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .vewd-filters button:hover { border-color: #555; color: #888; }
+        .vewd-filters button.active { border-color: #fff; color: #fff; }
         .vewd-bar {
             display: flex;
             gap: 6px 8px;
@@ -320,6 +390,12 @@ HTML = '''<!DOCTYPE html>
         </div>
     </div>
     <div class="vewd-bar">
+        <div class="vewd-filters">
+            <button class="type-filter active" data-type="all">all</button>
+            <button class="type-filter" data-type="image">img</button>
+            <button class="type-filter" data-type="video">vid</button>
+            <button class="type-filter" data-type="audio">aud</button>
+        </div>
         <span id="count">0</span>
         <button id="filter-btn">&#10084;</button>
         <span id="tagged-count">0</span>
@@ -348,16 +424,18 @@ HTML = '''<!DOCTYPE html>
         let selectedIndices = new Set();
         let showOnlyTagged = false;
         let knownImages = new Set();
+        let activePaneIndex = -1;
+        let typeFilter = 'all';
 
         async function loadImages() {
             try {
                 const res = await fetch('/api/images');
                 const data = await res.json();
 
-                for (const img of data) {
-                    if (!knownImages.has(img.name)) {
-                        knownImages.add(img.name);
-                        addImage(img.path, img.name);
+                for (const item of data) {
+                    if (!knownImages.has(item.name)) {
+                        knownImages.add(item.name);
+                        addMedia(item.path, item.name, item.type || 'image');
                     }
                 }
             } catch (e) {
@@ -365,25 +443,33 @@ HTML = '''<!DOCTYPE html>
             }
         }
 
-        function addImage(src, name) {
+        function addMedia(src, name, type) {
             const index = images.length;
             const thumb = document.createElement('div');
             thumb.className = 'thumb';
             thumb.dataset.index = index;
 
-            const img = document.createElement('img');
-            img.src = src;
-            img.title = name;
+            if (type === 'video') {
+                thumb.innerHTML = '<video src="' + src + '" muted preload="metadata"></video><div class="media-icon">&#9654;</div>';
+                const vid = thumb.querySelector('video');
+                vid.addEventListener('loadedmetadata', () => { vid.currentTime = 0.1; });
+            } else if (type === 'audio') {
+                thumb.innerHTML = '<div class="audio-icon">&#9835;</div>';
+            } else {
+                const img = document.createElement('img');
+                img.src = src;
+                img.title = name;
+                thumb.appendChild(img);
+            }
 
             const indexLabel = document.createElement('div');
             indexLabel.className = 'index';
             indexLabel.textContent = index + 1;
 
-            thumb.appendChild(img);
             thumb.appendChild(indexLabel);
             grid.insertBefore(thumb, grid.firstChild);
 
-            images.unshift({ src, name, element: thumb, tagged: false });
+            images.unshift({ src, name, type, element: thumb, tagged: false });
 
             // Reindex all
             images.forEach((img, i) => {
@@ -429,12 +515,15 @@ HTML = '''<!DOCTYPE html>
                 img.element.classList.toggle('selected', selectedIndices.has(i));
                 img.element.classList.toggle('tagged', img.tagged);
                 if (img.tagged) taggedCount++;
-                if (showOnlyTagged) {
-                    img.element.classList.toggle('hidden', !img.tagged);
-                } else {
-                    img.element.classList.remove('hidden');
-                }
+                const typeMatch = typeFilter === 'all' || img.type === typeFilter;
+                const tagMatch = !showOnlyTagged || img.tagged;
+                img.element.classList.toggle('hidden', !typeMatch || !tagMatch);
             });
+
+            document.querySelectorAll('.type-filter').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === typeFilter);
+            });
+
             countEl.textContent = images.length;
             taggedCountEl.textContent = taggedCount;
             filterBtn.classList.toggle('on', showOnlyTagged);
@@ -447,19 +536,45 @@ HTML = '''<!DOCTYPE html>
             const selected = Array.from(selectedIndices).sort((a, b) => a - b);
             const compareImages = document.getElementById('compare-images');
 
-            if (selected.length >= 2) {
-                compare.classList.add('visible');
-                compareImages.classList.remove('single-view');
-                pane1.innerHTML = `<span class="label">${selected[0] + 1}</span><img src="${images[selected[0]].src}">`;
-                pane2.innerHTML = `<span class="label">${selected[1] + 1}</span><img src="${images[selected[1]].src}">`;
-            } else if (selected.length === 1) {
-                compare.classList.add('visible');
-                compareImages.classList.add('single-view');
-                pane1.innerHTML = `<span class="label">${selected[0] + 1}</span><img src="${images[selected[0]].src}">`;
-                pane2.innerHTML = '';
-            } else {
-                compare.classList.remove('visible');
+            function renderPreview(media) {
+                if (media.type === 'video') {
+                    return '<video src="' + media.src + '" controls muted loop></video>';
+                } else if (media.type === 'audio') {
+                    return '<div class="audio-preview"><span class="icon">&#9835;</span><audio src="' + media.src + '" controls></audio></div>';
+                }
+                return '<img src="' + media.src + '">';
             }
+
+            function setupPane(pane, imgIndex, paneIdx) {
+                pane.innerHTML = '<span class="label">' + (imgIndex + 1) + '</span>' + renderPreview(images[imgIndex]) + '<span class="pane-heart">&#10084;</span>';
+                pane.classList.toggle('pane-tagged', images[imgIndex].tagged);
+                pane.onclick = () => { activePaneIndex = paneIdx; updatePaneHighlight(); };
+            }
+
+            if (selected.length >= 2) {
+                compareImages.classList.remove('single-view');
+                setupPane(pane1, selected[0], 0);
+                setupPane(pane2, selected[1], 1);
+            } else if (selected.length === 1) {
+                compareImages.classList.add('single-view');
+                setupPane(pane1, selected[0], 0);
+                pane2.innerHTML = '';
+                pane2.classList.remove('pane-tagged');
+                activePaneIndex = -1;
+            } else {
+                compareImages.classList.add('single-view');
+                pane1.innerHTML = '';
+                pane2.innerHTML = '';
+                pane1.classList.remove('pane-tagged');
+                pane2.classList.remove('pane-tagged');
+                activePaneIndex = -1;
+            }
+            updatePaneHighlight();
+        }
+
+        function updatePaneHighlight() {
+            pane1.classList.toggle('active-pane', activePaneIndex === 0);
+            pane2.classList.toggle('active-pane', activePaneIndex === 1);
         }
 
         function toggleTag(index) {
@@ -524,7 +639,21 @@ HTML = '''<!DOCTYPE html>
                 case 'ArrowLeft': e.preventDefault(); navigateTo(focusIndex - 1, e); break;
                 case 'ArrowDown': e.preventDefault(); navigateTo(focusIndex + cols, e); break;
                 case 'ArrowUp': e.preventDefault(); navigateTo(focusIndex - cols, e); break;
-                case ' ': e.preventDefault(); toggleTag(focusIndex); break;
+                case ' ':
+                    e.preventDefault();
+                    if (activePaneIndex >= 0) {
+                        const sel = Array.from(selectedIndices).sort((a, b) => a - b);
+                        if (sel.length >= 2 && activePaneIndex < 2) {
+                            toggleTag(sel[activePaneIndex]);
+                        }
+                    } else if (selectedIndices.size > 1) {
+                        const anyTagged = [...selectedIndices].some(i => images[i].tagged);
+                        selectedIndices.forEach(i => { images[i].tagged = !anyTagged; });
+                        updateUI();
+                    } else {
+                        toggleTag(focusIndex);
+                    }
+                    break;
                 case 'Delete':
                 case 'Backspace': e.preventDefault(); deleteSelected(); break;
                 case 't':
@@ -543,7 +672,6 @@ HTML = '''<!DOCTYPE html>
                 case 'Escape':
                     e.preventDefault();
                     selectedIndices.clear();
-                    compare.classList.remove('visible');
                     updateUI();
                     break;
             }
@@ -600,6 +728,11 @@ HTML = '''<!DOCTYPE html>
             }
         });
 
+        // Type filter buttons
+        document.querySelectorAll('.type-filter').forEach(btn => {
+            btn.addEventListener('click', () => { typeFilter = btn.dataset.type; updateUI(); });
+        });
+
         // Bottom bar buttons
         filterBtn.addEventListener('click', () => {
             showOnlyTagged = !showOnlyTagged;
@@ -612,7 +745,6 @@ HTML = '''<!DOCTYPE html>
             knownImages.clear();
             focusIndex = -1;
             selectedIndices.clear();
-            compare.classList.remove('visible');
             updateUI();
         });
 
