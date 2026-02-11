@@ -95,31 +95,27 @@ class ViewerHandler(SimpleHTTPRequestHandler):
             self.send_error(404)
 
     def handle_save_post(self):
+        import shutil
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         data = json.loads(body)
 
-        saved = []
-        for i, img in enumerate(data.get('images', [])):
-            src_name = img['name']
-            src_path = watch_folder / src_name
-            if src_path.exists():
-                # Create new name
-                num = str(i + 1).zfill(2)
-                stem = src_path.stem
-                suffix = src_path.suffix
-                new_name = f"{stem}_select{num}{suffix}"
-                dst_path = watch_folder / new_name
+        selects_dir = watch_folder / 'selects'
+        selects_dir.mkdir(exist_ok=True)
 
-                # Copy file
-                import shutil
+        saved = []
+        for img in data.get('images', []):
+            src_path = watch_folder / img['name']
+            if src_path.exists():
+                dst_path = selects_dir / src_path.name
                 shutil.copy2(src_path, dst_path)
-                saved.append(new_name)
+                saved.append(src_path.name)
 
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps({'saved': saved}).encode())
+        self.wfile.write(json.dumps({'saved': saved, 'folder': str(selects_dir)}).encode())
+        print(f"Exported {len(saved)} files to {selects_dir}")
 
     def pick_folder(self):
         global watch_folder
@@ -400,7 +396,7 @@ HTML = '''<!DOCTYPE html>
         <button id="filter-btn">&#10084;</button>
         <span id="tagged-count">0</span>
         <button id="clear-btn">clear</button>
-        <button class="save-btn" id="save-btn">save</button>
+        <button class="save-btn" id="save-btn">export selects</button>
         <span id="status"></span>
         <span style="margin-left:auto;color:#444">spacebar &#10084;</span>
         <button class="vewd-logo" id="vewd-logo">vewd</button>
@@ -528,7 +524,7 @@ HTML = '''<!DOCTYPE html>
             taggedCountEl.textContent = taggedCount;
             filterBtn.classList.toggle('on', showOnlyTagged);
             saveBtn.classList.toggle('active', taggedCount > 0);
-            saveBtn.textContent = taggedCount > 0 ? 'save (' + taggedCount + ')' : 'save';
+            saveBtn.textContent = taggedCount > 0 ? 'export selects (' + taggedCount + ')' : 'export selects';
             updateCompare();
         }
 
@@ -607,7 +603,7 @@ HTML = '''<!DOCTYPE html>
             updateUI();
         }
 
-        async function saveTagged() {
+        async function exportSelects() {
             const tagged = images.filter(img => img.tagged);
             if (tagged.length === 0) {
                 statusEl.textContent = 'No tagged images';
@@ -615,7 +611,7 @@ HTML = '''<!DOCTYPE html>
                 return;
             }
 
-            statusEl.textContent = 'Saving...';
+            statusEl.textContent = 'Exporting...';
             try {
                 const res = await fetch('/api/save', {
                     method: 'POST',
@@ -623,9 +619,9 @@ HTML = '''<!DOCTYPE html>
                     body: JSON.stringify({ images: tagged.map(img => ({ name: img.name })) })
                 });
                 const data = await res.json();
-                statusEl.textContent = `Saved ${data.saved.length} images`;
+                statusEl.textContent = `Exported ${data.saved.length} to selects/`;
             } catch (e) {
-                statusEl.textContent = 'Save failed';
+                statusEl.textContent = 'Export failed';
             }
             setTimeout(() => statusEl.textContent = '', 3000);
         }
@@ -666,7 +662,7 @@ HTML = '''<!DOCTYPE html>
                 case 's':
                     if (!e.ctrlKey) {
                         e.preventDefault();
-                        saveTagged();
+                        exportSelects();
                     }
                     break;
                 case 'Escape':
@@ -748,7 +744,7 @@ HTML = '''<!DOCTYPE html>
             updateUI();
         });
 
-        saveBtn.addEventListener('click', () => saveTagged());
+        saveBtn.addEventListener('click', () => exportSelects());
 
         vewdLogo.addEventListener('click', () => {
             window.open('https://x.com/spiritform', '_blank');
