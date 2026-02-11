@@ -297,10 +297,10 @@ function createVewdWidget(node) {
                 <button class="type-filter" data-type="audio">aud</button>
             </div>
             <span class="count">0</span>
+            <button class="clear-btn">clear</button>
             <button class="filter-btn">❤</button>
             <span class="tagged-count">0</span>
             <button class="auto-export-btn">auto</button>
-            <button class="clear-btn">clear</button>
             <button class="export-btn">export selects</button>
             <button class="save-btn">save</button>
             <span style="margin-left:auto;color:#444">spacebar ❤ | esc exit</span>
