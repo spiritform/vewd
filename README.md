@@ -23,24 +23,6 @@ A media viewer for reviewing, comparing, and selecting images. Works on Mac and 
 
 ![Vewd Clean UI](screenshot3.png)
 
-## Standalone App
-
-No ComfyUI required. Just Python.
-
-```bash
-# Windows
-vewd.bat
-
-# Mac / Linux
-chmod +x vewd.sh
-./vewd.sh
-
-# or directly
-python viewer.py path/to/images
-```
-
-Point it at any folder of images, videos, or audio. Opens a browser-based viewer to review, heart, compare, and export your selects.
-
 ## ComfyUI Node
 
 ### Installation
@@ -81,6 +63,25 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 | Spacebar | Heart/unheart |
 | Delete | Remove from viewer |
 | Esc | Exit fullscreen |
+
+## Standalone App
+
+No ComfyUI required. Just Python.
+
+```bash
+# Windows
+vewd.bat
+
+# Mac / Linux
+chmod +x vewd.sh
+./vewd.sh
+
+# or directly
+python viewer.py path/to/images
+```
+
+Point it at any folder of images, videos, or audio. Opens a browser-based viewer to review, heart, compare, and export your selects.
+
 
 ## License
 
