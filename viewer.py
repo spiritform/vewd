@@ -234,7 +234,7 @@ HTML = '''<!DOCTYPE html>
         .thumb img, .thumb video {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
         }
         .thumb .audio-icon {
             width: 100%;
@@ -446,9 +446,9 @@ HTML = '''<!DOCTYPE html>
             thumb.dataset.index = index;
 
             if (type === 'video') {
-                thumb.innerHTML = '<video src="' + src + '" muted preload="metadata"></video><div class="media-icon">&#9654;</div>';
+                thumb.innerHTML = '<video src="' + src + '" muted playsinline preload="auto"></video><div class="media-icon">&#9654;</div>';
                 const vid = thumb.querySelector('video');
-                vid.addEventListener('loadedmetadata', () => { vid.currentTime = 0.1; });
+                vid.addEventListener('loadeddata', () => { vid.currentTime = 0.1; });
             } else if (type === 'audio') {
                 thumb.innerHTML = '<div class="audio-icon">&#9835;</div>';
             } else {
@@ -534,7 +534,7 @@ HTML = '''<!DOCTYPE html>
 
             function renderPreview(media) {
                 if (media.type === 'video') {
-                    return '<video src="' + media.src + '" controls muted loop></video>';
+                    return '<video src="' + media.src + '" controls muted loop playsinline preload="auto"></video>';
                 } else if (media.type === 'audio') {
                     return '<div class="audio-preview"><span class="icon">&#9835;</span><audio src="' + media.src + '" controls></audio></div>';
                 }

@@ -86,7 +86,7 @@ style.textContent = `
         text-shadow: 0 0 2px rgba(0,0,0,0.8);
     }
     .vewd-item.hidden { display: none; }
-    .vewd-item img, .vewd-item video { width: 100%; height: 100%; object-fit: contain; }
+    .vewd-item img, .vewd-item video { width: 100%; height: 100%; object-fit: cover; }
     .vewd-item .audio-icon {
         width: 100%;
         height: 100%;
@@ -350,10 +350,9 @@ function createVewdWidget(node) {
         item.className = "vewd-item";
 
         if (type === "video") {
-            item.innerHTML = `<video src="${src}" muted preload="metadata"></video><div class="media-icon">▶</div>`;
-            // Seek to show thumbnail
+            item.innerHTML = `<video src="${src}" muted playsinline preload="auto"></video><div class="media-icon">▶</div>`;
             const vid = item.querySelector("video");
-            vid.addEventListener("loadedmetadata", () => { vid.currentTime = 0.1; });
+            vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
         } else if (type === "audio") {
             item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
         } else {
@@ -425,7 +424,7 @@ function createVewdWidget(node) {
         function renderPreview(media) {
             let content = "";
             if (media.type === "video") {
-                content = `<video src="${media.src}" controls muted loop></video>`;
+                content = `<video src="${media.src}" controls muted loop playsinline preload="auto"></video>`;
             } else if (media.type === "audio") {
                 content = `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
             } else {
