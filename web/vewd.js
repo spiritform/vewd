@@ -37,7 +37,7 @@ style.textContent = `
         min-width: 0;
         line-height: 1.3;
     }
-    .vewd-header .folder-input { width: 320px; }
+    .vewd-header .folder-input { width: 400px; }
     .vewd-header .prefix-input { width: 120px; }
     .vewd-header input:focus { color: #ccc; outline: none; }
     .vewd-header label { color: #555; font-size: 12px; white-space: nowrap; }
@@ -189,9 +189,9 @@ style.textContent = `
     .vewd-bar {
         display: flex;
         gap: 6px 8px;
-        padding: 8px 12px;
+        padding: 10px 12px;
         background: #1a1a1a;
-        font-size: 13px;
+        font-size: 14px;
         color: #555;
         align-items: center;
         flex-wrap: wrap;
@@ -206,10 +206,10 @@ style.textContent = `
         background: #252525;
         border: none;
         color: #777;
-        padding: 4px 12px;
+        padding: 5px 14px;
         border-radius: 3px;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 13px;
         line-height: 1.3;
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
