@@ -760,58 +760,53 @@ app.registerExtension({
                 console.warn("[Vewd] seed search error:", e);
             }
 
-            // Handle images
-            if (output?.images) {
-                output.images.forEach(img => {
-                    const key = `${img.filename}_${img.subfolder || ""}`;
-                    if (seenImages.has(key)) return;
-                    seenImages.add(key);
+            // Detect media type from filename extension
+            const videoExts = [".mp4", ".webm", ".mov", ".avi", ".mkv"];
+            const audioExts = [".mp3", ".wav", ".ogg", ".flac", ".aac"];
+            function detectType(filename) {
+                const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+                if (videoExts.includes(ext)) return "video";
+                if (audioExts.includes(ext)) return "audio";
+                return "image";
+            }
 
-                    const src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || "")}&type=${img.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, img.filename, "image", { subfolder: img.subfolder || "", type: img.type || "temp", seed: lastSeed });
-                });
+            function addOutput(item, fallbackType) {
+                const key = `${item.filename}_${item.subfolder || ""}`;
+                if (seenImages.has(key)) return;
+                seenImages.add(key);
+                const mediaType = detectType(item.filename) !== "image" ? detectType(item.filename) : fallbackType;
+                const src = api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}&type=${item.type || "temp"}&t=${Date.now()}`);
+                globalVewdWidget.addMedia(src, item.filename, mediaType, { subfolder: item.subfolder || "", type: item.type || "temp", seed: lastSeed });
+            }
+
+            // Handle images (detect videos by extension)
+            if (output?.images) {
+                output.images.forEach(img => addOutput(img, "image"));
             }
 
             // Handle GIFs (VHS nodes)
             if (output?.gifs) {
-                output.gifs.forEach(gif => {
-                    const key = `${gif.filename}_${gif.subfolder || ""}`;
-                    if (seenImages.has(key)) return;
-                    seenImages.add(key);
-
-                    const src = api.apiURL(`/view?filename=${encodeURIComponent(gif.filename)}&subfolder=${encodeURIComponent(gif.subfolder || "")}&type=${gif.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, gif.filename, "video", { subfolder: gif.subfolder || "", type: gif.type || "temp" });
-                });
+                output.gifs.forEach(gif => addOutput(gif, "video"));
             }
 
-            // Handle videos
+            // Handle videos (plural and singular)
             if (output?.videos) {
-                output.videos.forEach(vid => {
-                    const key = `${vid.filename}_${vid.subfolder || ""}`;
-                    if (seenImages.has(key)) return;
-                    seenImages.add(key);
-
-                    const src = api.apiURL(`/view?filename=${encodeURIComponent(vid.filename)}&subfolder=${encodeURIComponent(vid.subfolder || "")}&type=${vid.type}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, vid.filename, "video", { subfolder: vid.subfolder || "", type: vid.type || "temp" });
-                });
+                output.videos.forEach(vid => addOutput(vid, "video"));
+            }
+            if (output?.video) {
+                const vids = Array.isArray(output.video) ? output.video : [output.video];
+                vids.forEach(vid => addOutput(vid, "video"));
             }
 
             // Handle audio - try multiple keys that different nodes use
             const audioSources = output?.audio || output?.audios || output?.audio_file;
             if (audioSources) {
                 const audioList = Array.isArray(audioSources) ? audioSources : [audioSources];
-                audioList.forEach(aud => {
-                    const key = `${aud.filename}_${aud.subfolder || ""}`;
-                    if (seenImages.has(key)) return;
-                    seenImages.add(key);
-
-                    const src = api.apiURL(`/view?filename=${encodeURIComponent(aud.filename)}&subfolder=${encodeURIComponent(aud.subfolder || "")}&type=${aud.type || "output"}&t=${Date.now()}`);
-                    globalVewdWidget.addMedia(src, aud.filename, "audio", { subfolder: aud.subfolder || "", type: aud.type || "output" });
-                });
+                audioList.forEach(aud => addOutput(aud, "audio"));
             }
 
             // Debug: log unknown output types to console
-            const knownKeys = new Set(["images", "gifs", "videos", "audio", "audios", "audio_file", "vewd_images"]);
+            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "vewd_images"]);
             Object.keys(output || {}).forEach(key => {
                 if (!knownKeys.has(key)) {
                     console.log("[Vewd] Unknown output key:", key, output[key]);
