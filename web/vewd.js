@@ -189,7 +189,7 @@ style.textContent = `
     .vewd-bar {
         display: flex;
         gap: 6px 8px;
-        padding: 10px 12px;
+        padding: 10px;
         background: #1a1a1a;
         font-size: 14px;
         color: #555;
