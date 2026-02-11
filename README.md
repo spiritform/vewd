@@ -22,8 +22,9 @@ A media viewer node for ComfyUI. Auto-captures all generated media into a grid f
 
 ![Vewd Node Toolbar](screenshot2.png)
 
+*Clean and minimal UI — no wires necessary*
+
 ![Vewd Clean UI](screenshot3.png)
-*Clean base UI — no wires necessary*
 
 ## Installation
 
