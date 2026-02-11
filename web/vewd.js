@@ -201,7 +201,7 @@ style.textContent = `
         font-weight: 600;
         letter-spacing: 0.5px;
     }
-    .vewd-bar .vewd-logo:hover { color: #4a9eff !important; }
+    .vewd-bar .vewd-logo:hover { background: #fff !important; color: #111 !important; }
     .vewd-bar button {
         background: #252525;
         border: none;
