@@ -52,7 +52,7 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 | Key | Action |
 |-----|--------|
 | ← → ↑ ↓ | Navigate grid |
-| Space | Heart/unheart |
+| Spacebar | Heart/unheart |
 | Delete | Remove from viewer |
 | Esc | Exit fullscreen |
 
