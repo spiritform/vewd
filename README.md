@@ -19,7 +19,7 @@ A media viewer for reviewing, comparing, and selecting images. Use it as a **sta
 
 ![Vewd Node Toolbar](screenshot2.png)
 
-*Clean and minimal UI design*
+*Completely wireless clean and minimal UI design*
 
 ![Vewd Clean UI](screenshot3.png)
 
