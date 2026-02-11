@@ -250,12 +250,12 @@ style.textContent = `
         padding: 20px;
     }
     .vewd-fullscreen .vewd-bar {
-        padding: 10px 20px;
-        font-size: 12px;
+        padding: 10px;
+        font-size: 14px;
     }
     .vewd-fullscreen .vewd-bar button {
         padding: 5px 14px;
-        font-size: 12px;
+        font-size: 13px;
     }
 `;
 document.head.appendChild(style);
