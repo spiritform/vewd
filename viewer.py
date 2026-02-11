@@ -393,9 +393,9 @@ HTML = '''<!DOCTYPE html>
             <button class="type-filter" data-type="audio">aud</button>
         </div>
         <span id="count">0</span>
+        <button id="clear-btn">clear</button>
         <button id="filter-btn">&#10084;</button>
         <span id="tagged-count">0</span>
-        <button id="clear-btn">clear</button>
         <button class="save-btn" id="save-btn">export selects</button>
         <span id="status"></span>
         <span style="margin-left:auto;color:#444">spacebar &#10084;</span>
