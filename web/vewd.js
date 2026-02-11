@@ -438,6 +438,7 @@ function createVewdWidget(node) {
             pane.innerHTML = renderPreview(state.images[imgIndex]);
             pane.classList.toggle("pane-tagged", state.tagged.has(imgIndex));
             pane.onclick = (e) => { e.stopPropagation(); activePaneIndex = paneIdx; updatePaneHighlight(); };
+            pane.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
         }
 
         if (sel.length >= 2) {
