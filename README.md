@@ -28,8 +28,14 @@ A media viewer for reviewing, comparing, and selecting images. Use it as a **sta
 No ComfyUI required. Just Python.
 
 ```bash
+# Windows
 vewd.bat
-# or
+
+# Mac / Linux
+chmod +x vewd.sh
+./vewd.sh
+
+# or directly
 python viewer.py path/to/images
 ```
 
