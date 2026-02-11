@@ -6,11 +6,11 @@ A media viewer node for ComfyUI. Auto-captures all generated media into a grid f
 
 ## Why Vewd?
 
-**Reduce waste, save only what you want.** Instead of saving hundreds of images to your hard drive and sorting through them later, Vewd lets you review generations in real-time, heart your favorites, and export only your selects.
+**Reduce waste, save only what you want, where you want.** Instead of saving hundreds of images to your hard drive and sorting through them later, Vewd lets you review generations in real-time, heart your favorites, and export only your selects.
 
 ## Features
 
-- **Zero wiring** - No connections needed. Vewd automatically captures all media from your workflow
+- **No wires** - No connections to nodes are needed. Vewd automatically captures all media produced by the workflow
 - **All media types** - Images, videos, and audio
 - **Grid view** - See all generations in a thumbnail grid
 - **Preview & compare** - Click to preview, select two to compare side-by-side
