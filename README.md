@@ -1,4 +1,4 @@
-# Vewd
+# vewd
 
 A media viewer node for ComfyUI. Auto-captures all generated media into a grid for easy viewing, sorting, and comparing.
 
