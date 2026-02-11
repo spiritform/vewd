@@ -1,6 +1,6 @@
 # vewd
 
-A media viewer for reviewing, comparing, and selecting images. Use it as a **standalone app** with any folder of images, or as a **ComfyUI node** that auto-captures generations.
+A media viewer for reviewing, comparing, and selecting images. Works on Mac and PC. Use it as a **standalone app** with any folder of images, or as a **ComfyUI node** that auto-captures generations.
 
 ![Vewd Screenshot](screenshot.png)
 
