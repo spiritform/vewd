@@ -862,6 +862,6 @@ app.registerExtension({
         widget.folderInput.addEventListener("input", persist);
         widget.prefixInput.addEventListener("input", persist);
 
-        node.setSize([800, 600]);
+        node.setSize([1100, 600]);
     }
 });
