@@ -740,37 +740,53 @@ app.registerExtension({
 
     async setup() {
         let lastSeed = null;
+        let lastPromptData = null;
 
-        // Capture seed from prompt data at queue time (before execution)
-        // This is more reliable than reading widget values after execution,
-        // which can lag behind when EasySeed/randomize updates the seed
+        // Capture full prompt data at queue time for seed tracing
         const origFetchApi = api.fetchApi.bind(api);
         api.fetchApi = function(url, options, ...rest) {
             if (typeof url === 'string' && url.endsWith('/prompt') && options?.method === 'POST') {
                 try {
                     const body = JSON.parse(options.body);
-                    const prompt = body.prompt;
-                    if (prompt) {
-                        for (const nodeInfo of Object.values(prompt)) {
-                            const inputs = nodeInfo.inputs || {};
-                            for (const [key, val] of Object.entries(inputs)) {
-                                if (/(?:^|_)seed$/.test(key) && typeof val === 'number') {
-                                    lastSeed = String(val);
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn("[Vewd] prompt seed capture error:", e);
-                }
+                    if (body.prompt) lastPromptData = body.prompt;
+                } catch (e) {}
             }
             return origFetchApi(url, options, ...rest);
         };
+
+        // Walk backwards from a node through prompt dependency graph to find its seed
+        function findSeedForNode(prompt, nodeId) {
+            const visited = new Set();
+            const queue = [String(nodeId)];
+            while (queue.length) {
+                const id = queue.shift();
+                if (visited.has(id)) continue;
+                visited.add(id);
+                const node = prompt[id];
+                if (!node) continue;
+                for (const [key, val] of Object.entries(node.inputs || {})) {
+                    if (/(?:^|_)seed$/.test(key) && typeof val === 'number') {
+                        return String(val);
+                    }
+                    // Follow links: [nodeId, outputIndex]
+                    if (Array.isArray(val) && val.length === 2) {
+                        queue.push(String(val[0]));
+                    }
+                }
+            }
+            return null;
+        }
 
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
             const output = detail?.output;
+
+            // Resolve seed from the dependency chain of the node that produced output
+            if (lastPromptData && detail?.node) {
+                const seed = findSeedForNode(lastPromptData, detail.node);
+                if (seed) lastSeed = seed;
+            }
 
             // Detect media type from filename extension
             const videoExts = [".mp4", ".webm", ".mov", ".avi", ".mkv"];
