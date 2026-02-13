@@ -741,24 +741,36 @@ app.registerExtension({
     async setup() {
         let lastSeed = null;
 
+        // Capture seed from prompt data at queue time (before execution)
+        // This is more reliable than reading widget values after execution,
+        // which can lag behind when EasySeed/randomize updates the seed
+        const origFetchApi = api.fetchApi.bind(api);
+        api.fetchApi = function(url, options, ...rest) {
+            if (typeof url === 'string' && url.endsWith('/prompt') && options?.method === 'POST') {
+                try {
+                    const body = JSON.parse(options.body);
+                    const prompt = body.prompt;
+                    if (prompt) {
+                        for (const nodeInfo of Object.values(prompt)) {
+                            const inputs = nodeInfo.inputs || {};
+                            for (const [key, val] of Object.entries(inputs)) {
+                                if (/(?:^|_)seed$/.test(key) && typeof val === 'number') {
+                                    lastSeed = String(val);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[Vewd] prompt seed capture error:", e);
+                }
+            }
+            return origFetchApi(url, options, ...rest);
+        };
+
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
             const output = detail?.output;
-
-            // Capture seed: walk all graph nodes, match "seed" or "123: seed" (subgraph prefix)
-            try {
-                const nodes = app.graph._nodes || [];
-                for (const n of nodes) {
-                    const sw = n.widgets?.find(w => w.name === "seed" || w.name.endsWith(": seed"));
-                    if (sw && sw.value != null) {
-                        lastSeed = String(sw.value);
-                        break;
-                    }
-                }
-            } catch (e) {
-                console.warn("[Vewd] seed search error:", e);
-            }
 
             // Detect media type from filename extension
             const videoExts = [".mp4", ".webm", ".mov", ".avi", ".mkv"];
