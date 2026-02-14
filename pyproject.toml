@@ -1,7 +1,7 @@
 [project]
 name = "vewd"
 description = "A media viewer node for ComfyUI. Auto-captures all generated media into a grid for easy viewing, sorting, and comparing."
-version = "1.0.2"
+version = "1.0.3"
 license = { file = "LICENSE" }
 dependencies = []
 
