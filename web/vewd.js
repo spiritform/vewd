@@ -214,12 +214,8 @@ style.textContent = `
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
     .vewd-bar button.on { background: #ff4a6a; color: #fff; }
-    .vewd-bar .save-btn { background: #1a1a1a; color: #333; pointer-events: none; }
-    .vewd-bar .save-btn.active { background: #252525; color: #777; pointer-events: auto; }
-    .vewd-bar .save-btn.active:hover { background: #333; color: #aaa; }
-    .vewd-bar .export-btn { background: #1a1a1a; color: #333; pointer-events: none; }
-    .vewd-bar .export-btn.active { background: #252525; color: #777; pointer-events: auto; }
-    .vewd-bar .export-btn.active:hover { background: #333; color: #aaa; }
+    .vewd-bar .save-btn { background: #333; color: #aaa; }
+    .vewd-bar .save-btn:hover { background: #444; color: #ccc; }
     .vewd-bar .flash { background: #fff !important; color: #111 !important; transition: none; }
     .vewd-bar .flash-fade { transition: background 0.6s, color 0.6s; }
 
@@ -301,9 +297,8 @@ function createVewdWidget(node) {
             <button class="filter-btn">❤</button>
             <span class="tagged-count">0</span>
             <button class="auto-export-btn">auto</button>
-            <button class="export-btn">export selects</button>
             <button class="save-btn">save</button>
-            <span style="margin-left:auto;color:#444">spacebar ❤ | esc exit</span>
+            <span style="margin-left:auto;color:#444">spacebar ❤ | s save | esc exit</span>
             <button class="vewd-logo">vewd</button>
         </div>
     `;
@@ -315,7 +310,6 @@ function createVewdWidget(node) {
     const filterBtn = el.querySelector(".filter-btn");
     const clearBtn = el.querySelector(".clear-btn");
     const saveBtn = el.querySelector(".save-btn");
-    const exportBtn = el.querySelector(".export-btn");
     const autoExportBtn = el.querySelector(".auto-export-btn");
     const fullscreenBtn = el.querySelector(".fullscreen-btn");
     const logoBtn = el.querySelector(".vewd-logo");
@@ -465,12 +459,7 @@ function createVewdWidget(node) {
         filterBtn.classList.toggle("on", state.filterOn);
 
         const saveCount = state.selected.size;
-        saveBtn.classList.toggle("active", saveCount > 0);
         saveBtn.textContent = saveCount > 0 ? `save (${saveCount})` : "save";
-
-        const exportCount = state.selected.size > 0 ? state.selected.size : (state.filterOn ? state.tagged.size : 0);
-        exportBtn.classList.toggle("active", exportCount > 0);
-        exportBtn.textContent = exportCount > 0 ? `export selects (${exportCount})` : "export selects";
 
         autoExportBtn.classList.toggle("on", state.autoExport);
     }
@@ -692,6 +681,12 @@ function createVewdWidget(node) {
                 e.stopPropagation();
                 deleteSelected();
                 break;
+            case "s":
+            case "S":
+                e.preventDefault();
+                e.stopPropagation();
+                saveImages();
+                break;
             case "Escape":
                 if (isFullscreen) {
                     e.preventDefault();
@@ -719,7 +714,6 @@ function createVewdWidget(node) {
         update();
     };
     saveBtn.onclick = saveImages;
-    exportBtn.onclick = exportSelects;
     autoExportBtn.onclick = () => { state.autoExport = !state.autoExport; update(); };
     fullscreenBtn.onclick = toggleFullscreen;
     logoBtn.onclick = () => window.open("https://x.com/spiritform", "_blank");
