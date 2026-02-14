@@ -84,6 +84,23 @@ python viewer.py path/to/images
 Point it at any folder of images, videos, or audio. Opens a browser-based viewer to review, heart, compare, and export your selects.
 
 
+## What's New
+
+### v1.1.0 — 3D Model Support
+- **3D capture** — Auto-captures `.glb` and `.obj` output from nodes like Hunyuan3D
+- **Interactive preview** — Orbit, zoom, and auto-rotate 3D models directly in the preview pane
+- **Smart thumbnails** — Grid shows the source image used for generation with a 🧊 badge
+- **3D filter** — New filter button to show only 3D models
+- **Save support** — Save 3D files with original format preserved
+
+### v1.0.4
+- Seed tracing from dependency graph
+- ComfyUI Registry support
+
+### v1.0.3
+- Consolidated save button with S hotkey
+- Side-by-side compare with pane selection
+
 ## License
 
 MIT
