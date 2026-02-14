@@ -12,8 +12,9 @@ A media viewer for reviewing, comparing, and selecting images. Works on Mac and 
 
 - **Grid + preview** - Thumbnail grid with side-by-side preview and compare
 - **Heart favorites** - Spacebar to heart, filter to show only selects
-- **All media types** - Images, videos, and audio
-- **Media filters** - Filter by all, images, videos, or audio
+- **All media types** - Images, videos, audio, and 3D models (.glb, .obj)
+- **3D viewer** - Interactive orbit/zoom preview for 3D models with auto-rotate
+- **Media filters** - Filter by all, images, videos, audio, or 3D
 - **Export selects** - Export hearted media to a `selects/` subfolder
 - **Non-destructive** - Delete only removes from viewer, not your files
 
@@ -43,7 +44,7 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 ### Usage
 
 1. Add the **Vewd** node to your workflow (found in `image` category)
-2. Run your workflow - media automatically appears in the grid
+2. Run your workflow - media automatically appears in the grid (images, videos, audio, 3D models)
 3. Click to preview, Ctrl+click or Shift+click to select multiple
 4. Space to heart favorites
 5. Click **export selects** to save hearted media
