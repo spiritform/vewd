@@ -3,6 +3,12 @@ import { api } from "../../scripts/api.js";
 
 console.log("[Vewd] Extension loaded");
 
+// Load model-viewer web component for 3D preview
+const mvScript = document.createElement("script");
+mvScript.type = "module";
+mvScript.src = "https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js";
+document.head.appendChild(mvScript);
+
 // Styles
 const style = document.createElement("style");
 style.textContent = `
@@ -87,7 +93,7 @@ style.textContent = `
     }
     .vewd-item.hidden { display: none; }
     .vewd-item img, .vewd-item video { width: 100%; height: 100%; object-fit: cover; }
-    .vewd-item .audio-icon {
+    .vewd-item .audio-icon, .vewd-item .model-icon {
         width: 100%;
         height: 100%;
         display: flex;
@@ -169,6 +175,12 @@ style.textContent = `
 
     .vewd-pane .audio-preview .icon { font-size: 64px; }
     .vewd-pane .audio-preview audio { width: 80%; height: 40px; }
+
+    .vewd-pane model-viewer {
+        width: 100%;
+        height: 100%;
+        --poster-color: #444;
+    }
 
     .vewd-filters {
         display: flex;
@@ -291,6 +303,7 @@ function createVewdWidget(node) {
                 <button class="type-filter" data-type="image">img</button>
                 <button class="type-filter" data-type="video">vid</button>
                 <button class="type-filter" data-type="audio">aud</button>
+                <button class="type-filter" data-type="model">3d</button>
             </div>
             <span class="count">0</span>
             <button class="clear-btn">clear</button>
@@ -339,7 +352,7 @@ function createVewdWidget(node) {
     let originalParent = null;
     let activePaneIndex = -1; // -1 = no pane active, 0 = left, 1 = right
 
-    function addMedia(src, filename, type = "image", sourceInfo = null) {
+    function addMedia(src, filename, type = "image", sourceInfo = null, thumbnail = null) {
         const item = document.createElement("div");
         item.className = "vewd-item";
 
@@ -349,6 +362,12 @@ function createVewdWidget(node) {
             vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
         } else if (type === "audio") {
             item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
+        } else if (type === "model") {
+            if (thumbnail) {
+                item.innerHTML = `<img src="${thumbnail}"><div class="media-icon">🧊</div>`;
+            } else {
+                item.innerHTML = `<div class="model-icon">🧊</div>`;
+            }
         } else {
             item.innerHTML = `<img src="${src}">`;
         }
@@ -421,6 +440,8 @@ function createVewdWidget(node) {
                 content = `<video src="${media.src}" controls muted loop playsinline preload="auto"></video>`;
             } else if (media.type === "audio") {
                 content = `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
+            } else if (media.type === "model") {
+                content = `<model-viewer src="${media.src}" camera-controls auto-rotate shadow-intensity="1" style="background-color:#444;width:100%;height:100%"></model-viewer>`;
             } else {
                 content = `<img src="${media.src}">`;
             }
@@ -466,8 +487,9 @@ function createVewdWidget(node) {
 
     function updatePaneHighlight() {
         const panes = previewArea.querySelectorAll(".vewd-pane");
-        panes[0].classList.toggle("active-pane", activePaneIndex === 0);
-        panes[1].classList.toggle("active-pane", activePaneIndex === 1);
+        const comparing = state.selected.size >= 2;
+        panes[0].classList.toggle("active-pane", comparing && activePaneIndex === 0);
+        panes[1].classList.toggle("active-pane", comparing && activePaneIndex === 1);
     }
 
     function navigate(d) {
@@ -586,7 +608,7 @@ function createVewdWidget(node) {
             });
             const data = await res.json();
             if (data.success) {
-                showToast(`Saved ${data.count} images`);
+                showToast("SAVED!");
                 flashBtn(saveBtn);
             } else {
                 showToast("Save failed");
@@ -771,6 +793,29 @@ app.registerExtension({
             return null;
         }
 
+        // Walk backwards from a node to find a source image filename (e.g. LoadImage node)
+        function findImageForNode(prompt, nodeId) {
+            const visited = new Set();
+            const queue = [String(nodeId)];
+            while (queue.length) {
+                const id = queue.shift();
+                if (visited.has(id)) continue;
+                visited.add(id);
+                const node = prompt[id];
+                if (!node) continue;
+                // LoadImage nodes have a string "image" input (the filename)
+                if (node.inputs?.image && typeof node.inputs.image === "string" && !Array.isArray(node.inputs.image)) {
+                    return api.apiURL(`/view?filename=${encodeURIComponent(node.inputs.image)}&type=input&t=${Date.now()}`);
+                }
+                for (const val of Object.values(node.inputs || {})) {
+                    if (Array.isArray(val) && val.length === 2) {
+                        queue.push(String(val[0]));
+                    }
+                }
+            }
+            return null;
+        }
+
         api.addEventListener("executed", ({ detail }) => {
             if (!globalVewdWidget) return;
 
@@ -785,20 +830,26 @@ app.registerExtension({
             // Detect media type from filename extension
             const videoExts = [".mp4", ".webm", ".mov", ".avi", ".mkv"];
             const audioExts = [".mp3", ".wav", ".ogg", ".flac", ".aac"];
+            const modelExts = [".glb", ".gltf", ".obj", ".ply", ".stl"];
             function detectType(filename) {
                 const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
                 if (videoExts.includes(ext)) return "video";
                 if (audioExts.includes(ext)) return "audio";
+                if (modelExts.includes(ext)) return "model";
                 return "image";
             }
 
-            function addOutput(item, fallbackType) {
+            function addOutput(item, fallbackType, thumbnail = null) {
                 const key = `${item.filename}_${item.subfolder || ""}`;
                 if (seenImages.has(key)) return;
                 seenImages.add(key);
                 const mediaType = detectType(item.filename) !== "image" ? detectType(item.filename) : fallbackType;
                 const src = api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}&type=${item.type || "temp"}&t=${Date.now()}`);
-                globalVewdWidget.addMedia(src, item.filename, mediaType, { subfolder: item.subfolder || "", type: item.type || "temp", seed: lastSeed });
+                // For 3D models, find source image from prompt graph if no thumbnail provided
+                if (mediaType === "model" && !thumbnail && lastPromptData && detail?.node) {
+                    thumbnail = findImageForNode(lastPromptData, detail.node);
+                }
+                globalVewdWidget.addMedia(src, item.filename, mediaType, { subfolder: item.subfolder || "", type: item.type || "temp", seed: lastSeed }, thumbnail);
             }
 
             // Handle images (detect videos by extension)
@@ -827,8 +878,30 @@ app.registerExtension({
                 audioList.forEach(aud => addOutput(aud, "audio"));
             }
 
+            // Handle 3D models / meshes
+            const meshSources = output?.mesh || output?.model_file;
+            if (meshSources) {
+                const meshList = Array.isArray(meshSources) ? meshSources : [meshSources];
+                meshList.forEach(m => addOutput(m, "model"));
+            }
+
+            // Handle "result" key (Preview 3D & Animation node sends ["filename.glb", camera_info, bg_image])
+            if (output?.result) {
+                const results = Array.isArray(output.result) ? output.result : [output.result];
+                results.forEach(item => {
+                    if (typeof item === "string" && modelExts.some(ext => item.toLowerCase().endsWith(ext))) {
+                        addOutput({ filename: item, subfolder: "", type: "output" }, "model");
+                    } else if (item && typeof item === "object" && item.filename) {
+                        const fn = item.filename.toLowerCase();
+                        if (modelExts.some(ext => fn.endsWith(ext))) {
+                            addOutput(item, "model");
+                        }
+                    }
+                });
+            }
+
             // Debug: log unknown output types to console
-            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "vewd_images"]);
+            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "mesh", "model_file", "result", "vewd_images"]);
             Object.keys(output || {}).forEach(key => {
                 if (!knownKeys.has(key)) {
                     console.log("[Vewd] Unknown output key:", key, output[key]);

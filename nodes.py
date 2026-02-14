@@ -6,9 +6,17 @@ from aiohttp import web
 from server import PromptServer
 
 
+BINARY_EXTS = {'.glb', '.gltf', '.obj', '.ply', '.stl'}
+
+
 def copy_with_metadata(src_path, dst_path, seed=None):
-    """Copy image, embedding seed as PNG metadata if provided."""
-    if seed and str(src_path).lower().endswith('.png'):
+    """Copy file, embedding seed as PNG metadata if applicable.
+    For 3D model files and non-PNG files, does a plain file copy."""
+    ext = Path(src_path).suffix.lower()
+    if ext in BINARY_EXTS:
+        shutil.copy2(src_path, dst_path)
+        return
+    if seed and ext == '.png':
         try:
             img = Image.open(src_path)
             meta = PngImagePlugin.PngInfo()
@@ -97,11 +105,13 @@ async def export_selects(request):
                 tried.append(str(src_path))
 
             if src_path.exists():
+                orig_ext = Path(filename).suffix.lower()
+                save_ext = orig_ext if orig_ext in BINARY_EXTS else ".png"
                 if seed:
-                    new_name = f"{prefix}_{seed}_{i + 1:03d}.png"
+                    new_name = f"{prefix}_{seed}_{i + 1:03d}{save_ext}"
                 else:
                     orig_stem = Path(filename).stem
-                    new_name = f"{prefix}_{orig_stem}.png"
+                    new_name = f"{prefix}_{orig_stem}{save_ext}"
                 dst_path = selects_dir / new_name
                 copy_with_metadata(src_path, dst_path, seed)
                 count += 1
@@ -156,17 +166,20 @@ async def save_images(request):
                 src_path = Path(folder) / filename
 
             if src_path.exists():
+                # Preserve original extension for non-image files (3D, video, audio)
+                orig_ext = Path(filename).suffix.lower()
+                save_ext = orig_ext if orig_ext in BINARY_EXTS else ".png"
                 if seed:
-                    # With seed: prefix_seed_001.png
+                    # With seed: prefix_seed_001.ext
                     seed_key = seed
                     if seed_key not in seed_counters:
-                        seed_counters[seed_key] = len(list(save_dir.glob(f"{prefix}_{seed}_*.png")))
+                        seed_counters[seed_key] = len(list(save_dir.glob(f"{prefix}_{seed}_*{save_ext}")))
                     seed_counters[seed_key] += 1
-                    new_name = f"{prefix}_{seed}_{seed_counters[seed_key]:03d}.png"
+                    new_name = f"{prefix}_{seed}_{seed_counters[seed_key]:03d}{save_ext}"
                 else:
-                    # No seed: use original ComfyUI filename — prefix_ComfyUI_temp_xxx_00001_.png
+                    # No seed: use original ComfyUI filename
                     orig_stem = Path(filename).stem
-                    new_name = f"{prefix}_{orig_stem}.png"
+                    new_name = f"{prefix}_{orig_stem}{save_ext}"
                 dst_path = save_dir / new_name
                 copy_with_metadata(src_path, dst_path, seed)
                 count += 1
