@@ -270,6 +270,8 @@ document.head.appendChild(style);
 
 // Widget factory
 function createVewdWidget(node) {
+    const nodeId = node.id;
+    const seenImages = new Set();
     const state = {
         images: [],
         focusIndex: -1,
@@ -396,6 +398,7 @@ function createVewdWidget(node) {
         state.focusIndex = 0;
 
         update();
+        persistState();
     }
 
     function addImage(src, filename) {
@@ -534,6 +537,7 @@ function createVewdWidget(node) {
         });
 
         update();
+        persistState();
     }
 
     async function exportSelects() {
@@ -692,6 +696,7 @@ function createVewdWidget(node) {
                             : state.tagged.add(state.focusIndex);
                     }
                     update();
+                    persistState();
                     if (state.autoExport && state.tagged.size > 0) {
                         autoExportTagged();
                     }
@@ -734,6 +739,7 @@ function createVewdWidget(node) {
         state.tagged.clear();
         seenImages.clear();
         update();
+        persistState();
     };
     saveBtn.onclick = saveImages;
     autoExportBtn.onclick = () => { state.autoExport = !state.autoExport; update(); };
@@ -743,12 +749,86 @@ function createVewdWidget(node) {
     folderInput.addEventListener("keydown", (e) => e.stopPropagation());
     prefixInput.addEventListener("keydown", (e) => e.stopPropagation());
 
-    return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput };
+    function persistState() {
+        try {
+            const data = {
+                images: state.images.map(img => ({
+                    src: img.src,
+                    filename: img.filename,
+                    type: img.type,
+                    sourceInfo: img.sourceInfo || null
+                })),
+                tagged: [...state.tagged],
+                seen: state.images.map(img => {
+                    const subfolder = img.sourceInfo?.subfolder || "";
+                    return `${img.filename}_${subfolder}`;
+                })
+            };
+            localStorage.setItem(`vewd_state_${nodeId}`, JSON.stringify(data));
+        } catch (e) {
+            console.warn("[Vewd] Failed to persist state:", e);
+        }
+    }
+
+    function restoreState() {
+        try {
+            const raw = localStorage.getItem(`vewd_state_${nodeId}`);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (!data?.images?.length) return;
+
+            data.images.forEach(saved => {
+                const item = document.createElement("div");
+                item.className = "vewd-item";
+
+                if (saved.type === "video") {
+                    item.innerHTML = `<video src="${saved.src}" muted playsinline preload="auto"></video><div class="media-icon">▶</div>`;
+                    const vid = item.querySelector("video");
+                    vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
+                } else if (saved.type === "audio") {
+                    item.innerHTML = `<div class="audio-icon">♪</div><audio src="${saved.src}"></audio>`;
+                } else if (saved.type === "model") {
+                    item.innerHTML = `<div class="model-icon">🧊</div>`;
+                } else {
+                    item.innerHTML = `<img src="${saved.src}">`;
+                }
+
+                item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
+                grid.appendChild(item);
+                state.images.push({ src: saved.src, filename: saved.filename, type: saved.type, el: item, sourceInfo: saved.sourceInfo });
+            });
+
+            // Bind click handlers
+            state.images.forEach((img, idx) => {
+                img.el.onclick = (e) => handleClick(idx, e);
+            });
+
+            // Restore tagged set
+            state.tagged = new Set(data.tagged || []);
+
+            // Repopulate seenImages
+            if (data.seen) {
+                data.seen.forEach(k => seenImages.add(k));
+            }
+
+            // Select first image
+            if (state.images.length > 0) {
+                state.selected.add(0);
+                state.focusIndex = 0;
+            }
+
+            update();
+            console.log(`[Vewd] Restored ${state.images.length} images, ${state.tagged.size} tagged`);
+        } catch (e) {
+            console.warn("[Vewd] Failed to restore state:", e);
+        }
+    }
+
+    return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput, seenImages, restoreState, persistState };
 }
 
 // Global widget reference
 let globalVewdWidget = null;
-let seenImages = new Set();
 
 // Register
 app.registerExtension({
@@ -841,8 +921,8 @@ app.registerExtension({
 
             function addOutput(item, fallbackType, thumbnail = null) {
                 const key = `${item.filename}_${item.subfolder || ""}`;
-                if (seenImages.has(key)) return;
-                seenImages.add(key);
+                if (globalVewdWidget.seenImages.has(key)) return;
+                globalVewdWidget.seenImages.add(key);
                 const mediaType = detectType(item.filename) !== "image" ? detectType(item.filename) : fallbackType;
                 const src = api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}&type=${item.type || "temp"}&t=${Date.now()}`);
                 // For 3D models, find source image from prompt graph if no thumbnail provided
@@ -956,6 +1036,8 @@ app.registerExtension({
         }
         widget.folderInput.addEventListener("input", persist);
         widget.prefixInput.addEventListener("input", persist);
+
+        widget.restoreState();
 
         node.setSize([1100, 600]);
     }
