@@ -93,7 +93,7 @@ style.textContent = `
     }
     .vewd-item.hidden { display: none; }
     .vewd-item img, .vewd-item video { width: 100%; height: 100%; object-fit: cover; }
-    .vewd-item .audio-icon, .vewd-item .model-icon {
+    .vewd-item .audio-icon, .vewd-item .model-icon, .vewd-item .splat-icon {
         width: 100%;
         height: 100%;
         display: flex;
@@ -180,6 +180,12 @@ style.textContent = `
         width: 100%;
         height: 100%;
         --poster-color: #444;
+    }
+
+    .vewd-pane iframe.splat-viewer {
+        width: 100%;
+        height: 100%;
+        border: none;
     }
 
     .vewd-filters {
@@ -370,6 +376,12 @@ function createVewdWidget(node) {
             } else {
                 item.innerHTML = `<div class="model-icon">🧊</div>`;
             }
+        } else if (type === "splat") {
+            if (thumbnail) {
+                item.innerHTML = `<img src="${thumbnail}"><div class="media-icon">💠</div>`;
+            } else {
+                item.innerHTML = `<div class="splat-icon">💠</div>`;
+            }
         } else {
             item.innerHTML = `<img src="${src}">`;
         }
@@ -377,7 +389,7 @@ function createVewdWidget(node) {
         item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
 
         grid.insertBefore(item, grid.firstChild);
-        state.images.unshift({ src, filename, type, el: item, sourceInfo });
+        state.images.unshift({ src, filename, type, el: item, sourceInfo, thumbnail });
 
         state.images.forEach((img, idx) => {
             img.el.onclick = (e) => handleClick(idx, e);
@@ -424,7 +436,7 @@ function createVewdWidget(node) {
         state.images.forEach((img, i) => {
             img.el.classList.toggle("selected", state.selected.has(i));
             img.el.classList.toggle("tagged", state.tagged.has(i));
-            const typeMatch = state.typeFilter === "all" || img.type === state.typeFilter;
+            const typeMatch = state.typeFilter === "all" || img.type === state.typeFilter || (state.typeFilter === "model" && img.type === "splat");
             const tagMatch = !state.filterOn || state.tagged.has(i);
             img.el.classList.toggle("hidden", !typeMatch || !tagMatch);
         });
@@ -445,17 +457,133 @@ function createVewdWidget(node) {
                 content = `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
             } else if (media.type === "model") {
                 content = `<model-viewer src="${media.src}" camera-controls auto-rotate shadow-intensity="1" style="background-color:#444;width:100%;height:100%"></model-viewer>`;
+            } else if (media.type === "splat") {
+                content = `<iframe class="splat-viewer" src="/extensions/vewd/splat-viewer.html"></iframe>`;
             } else {
                 content = `<img src="${media.src}">`;
             }
             return content + `<span class="pane-heart">❤</span>`;
         }
 
+        // Upload the currently viewed preview as IMAGE output for downstream nodes
+        function uploadPreviewAsOutput(pane, media) {
+            let dataUrl = null;
+            try {
+                if (media.type === "splat") {
+                    // Splat screenshots come via postMessage — handled separately
+                    return;
+                } else if (media.type === "video") {
+                    const video = pane.querySelector("video");
+                    if (video && video.readyState >= 2) {
+                        const c = document.createElement("canvas");
+                        c.width = video.videoWidth;
+                        c.height = video.videoHeight;
+                        c.getContext("2d").drawImage(video, 0, 0);
+                        dataUrl = c.toDataURL("image/png");
+                    }
+                } else if (media.type === "image") {
+                    const img = pane.querySelector("img");
+                    if (img && img.complete) {
+                        const c = document.createElement("canvas");
+                        c.width = img.naturalWidth;
+                        c.height = img.naturalHeight;
+                        c.getContext("2d").drawImage(img, 0, 0);
+                        dataUrl = c.toDataURL("image/png");
+                    }
+                }
+            } catch (e) {
+                // Cross-origin or other canvas errors — silently skip
+            }
+            if (dataUrl) sendScreenshot(dataUrl);
+        }
+
+        function sendScreenshot(dataUrl) {
+            api.fetchApi("/vewd/screenshot", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image: dataUrl, node_id: String(nodeId) })
+            }).catch(e => console.warn("[Vewd] Screenshot upload failed:", e));
+        }
+
+        function sendVideoInfo(media) {
+            const info = {
+                node_id: String(nodeId),
+                filename: media.filename,
+                subfolder: media.sourceInfo?.subfolder || "",
+                type: media.sourceInfo?.type || "temp",
+            };
+            api.fetchApi("/vewd/set_video", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(info)
+            }).catch(e => console.warn("[Vewd] Video info send failed:", e));
+        }
+
+        function clearVideoInfo() {
+            api.fetchApi("/vewd/set_video", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ node_id: String(nodeId), filename: "" })
+            }).catch(e => console.warn("[Vewd] Video info clear failed:", e));
+        }
+
+        // Listen for screenshot messages from splat viewer iframe
+        window.addEventListener("message", (event) => {
+            if (event.data?.type === "SCREENSHOT" && event.data.image) {
+                sendScreenshot(event.data.image);
+                showToast("Screenshot sent");
+            }
+        });
+
         function setupPane(pane, imgIndex, paneIdx) {
             pane.innerHTML = renderPreview(state.images[imgIndex]);
             pane.classList.toggle("pane-tagged", state.tagged.has(imgIndex));
             pane.onclick = (e) => { e.stopPropagation(); activePaneIndex = paneIdx; updatePaneHighlight(); };
             pane.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
+
+            const media = state.images[imgIndex];
+
+            // For splat type, fetch PLY data and send to iframe
+            if (media.type === "splat") {
+                const iframe = pane.querySelector("iframe.splat-viewer");
+                if (iframe) {
+                    iframe.addEventListener("load", () => {
+                        fetch(media.src)
+                            .then(r => r.arrayBuffer())
+                            .then(buffer => {
+                                iframe.contentWindow.postMessage({
+                                    type: "LOAD_MESH_DATA",
+                                    data: buffer,
+                                    filename: media.filename,
+                                    extrinsics: media.sourceInfo?.extrinsics || null,
+                                    intrinsics: media.sourceInfo?.intrinsics || null
+                                }, "*");
+                                // Auto-screenshot once loaded for IMAGE output
+                                setTimeout(() => {
+                                    iframe.contentWindow.postMessage({ type: "REQUEST_SCREENSHOT" }, "*");
+                                }, 1500);
+                            })
+                            .catch(err => console.error("[Vewd] Failed to load splat data:", err));
+                    }, { once: true });
+                }
+            } else if (media.type === "video") {
+                // For video, send file info for full-frame extraction + screenshot fallback
+                const el = pane.querySelector("video");
+                if (el) {
+                    el.addEventListener("loadeddata", () => {
+                        sendVideoInfo(media);
+                        uploadPreviewAsOutput(pane, media);
+                    }, { once: true });
+                }
+            } else {
+                // For images/audio, clear video info and upload preview
+                clearVideoInfo();
+                const el = pane.querySelector("img");
+                if (el) {
+                    const onReady = () => uploadPreviewAsOutput(pane, media);
+                    el.complete ? onReady() : el.addEventListener("load", onReady, { once: true });
+                }
+            }
         }
 
         if (sel.length >= 2) {
@@ -510,7 +638,10 @@ function createVewdWidget(node) {
 
         const toDelete = [...state.selected].sort((a, b) => b - a);
         toDelete.forEach(i => {
-            state.images[i].el.remove();
+            const img = state.images[i];
+            const seenKey = `${img.filename}_${img.sourceInfo?.subfolder || ""}`;
+            seenImages.delete(seenKey);
+            img.el.remove();
             state.images.splice(i, 1);
             state.tagged.delete(i);
         });
@@ -756,7 +887,8 @@ function createVewdWidget(node) {
                     src: img.src,
                     filename: img.filename,
                     type: img.type,
-                    sourceInfo: img.sourceInfo || null
+                    sourceInfo: img.sourceInfo || null,
+                    thumbnail: img.thumbnail || null
                 })),
                 tagged: [...state.tagged],
                 seen: state.images.map(img => {
@@ -788,14 +920,24 @@ function createVewdWidget(node) {
                 } else if (saved.type === "audio") {
                     item.innerHTML = `<div class="audio-icon">♪</div><audio src="${saved.src}"></audio>`;
                 } else if (saved.type === "model") {
-                    item.innerHTML = `<div class="model-icon">🧊</div>`;
+                    if (saved.thumbnail) {
+                        item.innerHTML = `<img src="${saved.thumbnail}"><div class="media-icon">🧊</div>`;
+                    } else {
+                        item.innerHTML = `<div class="model-icon">🧊</div>`;
+                    }
+                } else if (saved.type === "splat") {
+                    if (saved.thumbnail) {
+                        item.innerHTML = `<img src="${saved.thumbnail}"><div class="media-icon">💠</div>`;
+                    } else {
+                        item.innerHTML = `<div class="splat-icon">💠</div>`;
+                    }
                 } else {
                     item.innerHTML = `<img src="${saved.src}">`;
                 }
 
                 item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
                 grid.appendChild(item);
-                state.images.push({ src: saved.src, filename: saved.filename, type: saved.type, el: item, sourceInfo: saved.sourceInfo });
+                state.images.push({ src: saved.src, filename: saved.filename, type: saved.type, el: item, sourceInfo: saved.sourceInfo, thumbnail: saved.thumbnail || null });
             });
 
             // Bind click handlers
@@ -910,26 +1052,31 @@ app.registerExtension({
             // Detect media type from filename extension
             const videoExts = [".mp4", ".webm", ".mov", ".avi", ".mkv"];
             const audioExts = [".mp3", ".wav", ".ogg", ".flac", ".aac"];
-            const modelExts = [".glb", ".gltf", ".obj", ".ply", ".stl"];
+            const modelExts = [".glb", ".gltf", ".obj", ".stl"];
+            const splatExts = [".ply", ".splat"];
             function detectType(filename) {
                 const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
                 if (videoExts.includes(ext)) return "video";
                 if (audioExts.includes(ext)) return "audio";
+                if (splatExts.includes(ext)) return "splat";
                 if (modelExts.includes(ext)) return "model";
                 return "image";
             }
 
-            function addOutput(item, fallbackType, thumbnail = null) {
+            function addOutput(item, fallbackType, thumbnail = null, extraData = null) {
                 const key = `${item.filename}_${item.subfolder || ""}`;
                 if (globalVewdWidget.seenImages.has(key)) return;
                 globalVewdWidget.seenImages.add(key);
                 const mediaType = detectType(item.filename) !== "image" ? detectType(item.filename) : fallbackType;
                 const src = api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}&type=${item.type || "temp"}&t=${Date.now()}`);
-                // For 3D models, find source image from prompt graph if no thumbnail provided
-                if (mediaType === "model" && !thumbnail && lastPromptData && detail?.node) {
+                // For 3D models/splats, find source image from prompt graph if no thumbnail provided
+                if ((mediaType === "model" || mediaType === "splat") && !thumbnail && lastPromptData && detail?.node) {
                     thumbnail = findImageForNode(lastPromptData, detail.node);
+                    console.log("[Vewd] Thumbnail lookup for", mediaType, "node", detail.node, "→", thumbnail ? "found" : "not found");
                 }
-                globalVewdWidget.addMedia(src, item.filename, mediaType, { subfolder: item.subfolder || "", type: item.type || "temp", seed: lastSeed }, thumbnail);
+                const sourceInfo = { subfolder: item.subfolder || "", type: item.type || "temp", seed: lastSeed };
+                if (extraData) Object.assign(sourceInfo, extraData);
+                globalVewdWidget.addMedia(src, item.filename, mediaType, sourceInfo, thumbnail);
             }
 
             // Handle images (detect videos by extension)
@@ -966,22 +1113,44 @@ app.registerExtension({
             }
 
             // Handle "result" key (Preview 3D & Animation node sends ["filename.glb", camera_info, bg_image])
+            const allMeshExts = [...modelExts, ...splatExts];
             if (output?.result) {
                 const results = Array.isArray(output.result) ? output.result : [output.result];
                 results.forEach(item => {
-                    if (typeof item === "string" && modelExts.some(ext => item.toLowerCase().endsWith(ext))) {
-                        addOutput({ filename: item, subfolder: "", type: "output" }, "model");
+                    if (typeof item === "string" && allMeshExts.some(ext => item.toLowerCase().endsWith(ext))) {
+                        const fallback = splatExts.some(ext => item.toLowerCase().endsWith(ext)) ? "splat" : "model";
+                        addOutput({ filename: item, subfolder: "", type: "output" }, fallback);
                     } else if (item && typeof item === "object" && item.filename) {
                         const fn = item.filename.toLowerCase();
-                        if (modelExts.some(ext => fn.endsWith(ext))) {
-                            addOutput(item, "model");
+                        if (allMeshExts.some(ext => fn.endsWith(ext))) {
+                            const fallback = splatExts.some(ext => fn.endsWith(ext)) ? "splat" : "model";
+                            addOutput(item, fallback);
                         }
                     }
                 });
             }
 
+            // Handle PLY files from PlyPreview / Gaussian splat nodes (ply_file key)
+            if (output?.ply_file) {
+                // Capture extrinsics/intrinsics from the same output (PlyPreview sends these)
+                const extrinsics = output.extrinsics?.[0] || null;
+                const intrinsics = output.intrinsics?.[0] || null;
+                const extraData = {};
+                if (extrinsics) extraData.extrinsics = extrinsics;
+                if (intrinsics) extraData.intrinsics = intrinsics;
+
+                const plyFiles = Array.isArray(output.ply_file) ? output.ply_file : [output.ply_file];
+                plyFiles.forEach(p => {
+                    if (typeof p === "string" && p.length > 0) {
+                        const filename = p.includes("/") ? p.split("/").pop() : p.includes("\\") ? p.split("\\").pop() : p;
+                        const subfolder = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
+                        addOutput({ filename, subfolder, type: "output" }, "splat", null, Object.keys(extraData).length ? extraData : null);
+                    }
+                });
+            }
+
             // Debug: log unknown output types to console
-            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "mesh", "model_file", "result", "vewd_images"]);
+            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "mesh", "model_file", "result", "vewd_images", "ply_file", "filename", "file_size_mb", "extrinsics", "intrinsics"]);
             Object.keys(output || {}).forEach(key => {
                 if (!knownKeys.has(key)) {
                     console.log("[Vewd] Unknown output key:", key, output[key]);
