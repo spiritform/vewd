@@ -271,6 +271,12 @@ style.textContent = `
         padding: 5px 14px;
         font-size: 13px;
     }
+
+    .vewd-preview-area.drop-hover {
+        outline: 2px dashed #777;
+        outline-offset: -4px;
+        background: rgba(255,255,255,0.03);
+    }
 `;
 document.head.appendChild(style);
 
@@ -314,6 +320,8 @@ function createVewdWidget(node) {
                 <button class="type-filter" data-type="model">3d</button>
             </div>
             <span class="count">0</span>
+            <button class="import-btn">import</button>
+            <input type="file" class="import-input" multiple accept="image/*,video/*" style="display:none">
             <button class="clear-btn">clear</button>
             <button class="filter-btn">❤</button>
             <span class="tagged-count">0</span>
@@ -633,6 +641,13 @@ function createVewdWidget(node) {
         update();
     }
 
+    function isVisible(i) {
+        const img = state.images[i];
+        const typeMatch = state.typeFilter === "all" || img.type === state.typeFilter || (state.typeFilter === "model" && img.type === "splat");
+        const tagMatch = !state.filterOn || state.tagged.has(i);
+        return typeMatch && tagMatch;
+    }
+
     function deleteSelected() {
         if (state.selected.size === 0 || state.images.length === 0) return;
 
@@ -656,8 +671,25 @@ function createVewdWidget(node) {
 
         state.selected.clear();
         if (state.images.length > 0) {
-            state.focusIndex = Math.min(state.focusIndex, state.images.length - 1);
-            state.selected.add(state.focusIndex);
+            // Find next visible item respecting current filters
+            let candidate = Math.min(state.focusIndex, state.images.length - 1);
+            let found = -1;
+            // Search forward from candidate
+            for (let j = candidate; j < state.images.length; j++) {
+                if (isVisible(j)) { found = j; break; }
+            }
+            // If nothing forward, search backward
+            if (found < 0) {
+                for (let j = candidate - 1; j >= 0; j--) {
+                    if (isVisible(j)) { found = j; break; }
+                }
+            }
+            if (found >= 0) {
+                state.focusIndex = found;
+                state.selected.add(found);
+            } else {
+                state.focusIndex = -1;
+            }
         } else {
             state.focusIndex = -1;
         }
@@ -965,6 +997,92 @@ function createVewdWidget(node) {
             console.warn("[Vewd] Failed to restore state:", e);
         }
     }
+
+    // --- Import & Drag-Drop ---
+    const importInput = el.querySelector(".import-input");
+    const importBtn = el.querySelector(".import-btn");
+
+    const videoExts = [".mp4", ".webm", ".mov", ".avi", ".mkv"];
+    const audioExts = [".mp3", ".wav", ".ogg", ".flac", ".aac"];
+    const modelExts = [".glb", ".gltf", ".obj", ".stl"];
+    const splatExts = [".ply", ".splat"];
+    const imageExts = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".svg"];
+    const allExts = [...imageExts, ...videoExts, ...audioExts, ...modelExts, ...splatExts];
+
+    function detectType(filename) {
+        const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+        if (videoExts.includes(ext)) return "video";
+        if (audioExts.includes(ext)) return "audio";
+        if (splatExts.includes(ext)) return "splat";
+        if (modelExts.includes(ext)) return "model";
+        return "image";
+    }
+
+    async function importFiles(files) {
+        for (const file of files) {
+            const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+            if (!allExts.includes(ext)) continue;
+            try {
+                const form = new FormData();
+                form.append("image", file);
+                form.append("type", "input");
+                const res = await fetch("/upload/image", { method: "POST", body: form });
+                const data = await res.json();
+                const filename = data.name;
+                const subfolder = data.subfolder || "";
+                const src = api.apiURL(`/view?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(subfolder)}&type=input&t=${Date.now()}`);
+                const type = detectType(filename);
+                addMedia(src, filename, type, { subfolder, type: "input", seed: null });
+            } catch (e) {
+                console.warn("[Vewd] Import failed for", file.name, e);
+            }
+        }
+    }
+
+    async function importFromUrl(url) {
+        try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            let filename = "imported_" + Date.now() + ".png";
+            try {
+                const path = new URL(url).pathname;
+                const name = path.split("/").pop();
+                if (name && name.includes(".")) filename = name;
+            } catch (e) {}
+            const file = new File([blob], filename, { type: blob.type });
+            await importFiles([file]);
+        } catch (e) {
+            console.warn("[Vewd] URL import failed:", url, e);
+            showToast("Import failed");
+        }
+    }
+
+    importBtn.onclick = () => importInput.click();
+    importInput.onchange = () => {
+        if (importInput.files.length) importFiles([...importInput.files]);
+        importInput.value = "";
+    };
+
+    // Drag-drop on preview area
+    previewArea.addEventListener("dragover", (e) => { e.preventDefault(); previewArea.classList.add("drop-hover"); });
+    previewArea.addEventListener("dragenter", (e) => { e.preventDefault(); previewArea.classList.add("drop-hover"); });
+    previewArea.addEventListener("dragleave", () => { previewArea.classList.remove("drop-hover"); });
+    previewArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        previewArea.classList.remove("drop-hover");
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            importFiles([...e.dataTransfer.files]);
+        } else {
+            const url = e.dataTransfer.getData("text/uri-list") || "";
+            const htmlData = e.dataTransfer.getData("text/html") || "";
+            let imgUrl = url.split("\n").find(u => u && !u.startsWith("#"));
+            if (!imgUrl && htmlData) {
+                const match = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (match) imgUrl = match[1];
+            }
+            if (imgUrl) importFromUrl(imgUrl);
+        }
+    });
 
     return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput, seenImages, restoreState, persistState };
 }

@@ -12,8 +12,10 @@ A media viewer for reviewing, comparing, and selecting images. Works on Mac and 
 
 - **Grid + preview** - Thumbnail grid with side-by-side preview and compare
 - **Heart favorites** - Spacebar to heart, filter to show only selects
-- **All media types** - Images, videos, audio, and 3D models (.glb, .obj)
-- **3D viewer** - Interactive orbit/zoom preview for 3D models with auto-rotate
+- **All media types** - Images, videos, audio, 3D models (.glb, .obj), and Gaussian splats (.ply, .splat)
+- **3D viewer** - Interactive orbit/zoom preview for 3D models and Gaussian splats
+- **Import & drag-drop** - Drag files from explorer or images from browsers, or use the import button
+- **IMAGE/VIDEO output** - Pass selected media to downstream nodes
 - **Media filters** - Filter by all, images, videos, audio, or 3D
 - **Export selects** - Export hearted media to a `selects/` subfolder
 - **Non-destructive** - Delete only removes from viewer, not your files
@@ -44,7 +46,7 @@ Download and extract to `ComfyUI/custom_nodes/vewd/`
 ### Usage
 
 1. Add the **Vewd** node to your workflow (found in `image` category)
-2. Run your workflow - media automatically appears in the grid (images, videos, audio, 3D models)
+2. Run your workflow - media automatically appears in the grid (images, videos, audio, 3D models, splats)
 3. Click to preview, Ctrl+click or Shift+click to select multiple
 4. Space to heart favorites
 5. Click **export selects** to save hearted media
@@ -85,6 +87,16 @@ Point it at any folder of images, videos, or audio. Opens a browser-based viewer
 
 
 ## What's New
+
+### v1.4.0 — Gaussian Splat Support & Import
+
+- **Gaussian splat viewer** — Interactive `.ply` and `.splat` preview with orbit/zoom controls
+- **Smart splat capture** — Auto-captures PLY output from nodes like PlyPreview with camera extrinsics/intrinsics
+- **Import & drag-drop** — Drag files from Windows explorer or images from browsers (Pinterest, Google Images) directly into the viewer
+- **Import button** — File picker for importing external reference images and videos
+- **Filter-aware delete** — Deleting items while filtered now selects the next visible item instead of jumping to a hidden one
+- **IMAGE output** — Selected preview is uploaded as an IMAGE output for downstream nodes (images and video frames)
+- **VIDEO output** — Full video file info passed to downstream nodes for frame extraction
 
 ### v1.1.0 — 3D Model Support
 - **3D capture** — Auto-captures `.glb` and `.obj` output from nodes like Hunyuan3D
