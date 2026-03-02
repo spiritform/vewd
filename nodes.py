@@ -495,7 +495,8 @@ def generate_waveform(audio_path, width=256, height=256):
 
 @PromptServer.instance.routes.get("/vewd/waveform")
 async def get_waveform(request):
-    """Generate and return a waveform thumbnail for an audio file."""
+    """Generate and return a waveform thumbnail for an audio file.
+    Caches the result in output/vewd-cache/ for persistence across restarts."""
     try:
         filename = request.query.get("filename", "")
         subfolder = request.query.get("subfolder", "")
@@ -504,6 +505,15 @@ async def get_waveform(request):
         if not filename:
             return web.json_response({"error": "Missing filename"}, status=400)
 
+        # Check cache first
+        cache_dir = Path(folder_paths.get_output_directory()) / "vewd-cache"
+        cache_name = Path(filename).stem + "_waveform.png"
+        cache_path = cache_dir / cache_name
+
+        if cache_path.exists():
+            return web.Response(body=cache_path.read_bytes(), content_type="image/png")
+
+        # Find source audio
         type_dirs = {
             "temp": folder_paths.get_temp_directory(),
             "output": folder_paths.get_output_directory(),
@@ -513,16 +523,75 @@ async def get_waveform(request):
         audio_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
 
         if not audio_path.exists():
+            # Try alternate location
+            alt_type = "output" if source_type == "temp" else "temp"
+            alt_dir = type_dirs.get(alt_type, folder_paths.get_temp_directory())
+            audio_path = Path(alt_dir) / subfolder / filename if subfolder else Path(alt_dir) / filename
+
+        if not audio_path.exists():
             return web.json_response({"error": "File not found"}, status=404)
 
         img = generate_waveform(audio_path, width=800, height=200)
         if img is None:
             return web.json_response({"error": "Waveform generation failed"}, status=500)
 
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        return web.Response(body=buf.read(), content_type="image/png")
+        # Save to cache
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        img.save(cache_path, format="PNG")
+
+        # Also cache the source audio file for playback after temp is cleared
+        audio_cache_path = cache_dir / Path(filename).name
+        if not audio_cache_path.exists():
+            try:
+                shutil.copy2(audio_path, audio_cache_path)
+            except Exception as e:
+                print(f"[Vewd] Audio cache failed: {e}")
+
+        return web.Response(body=cache_path.read_bytes(), content_type="image/png")
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.get("/vewd/find_latest")
+async def find_latest(request):
+    """Find the latest file matching a prefix in the output directory.
+    Used for nodes like ACE-Step that save files but don't expose them via executed event."""
+    try:
+        prefix = request.query.get("prefix", "")
+        if not prefix:
+            return web.json_response({"error": "Missing prefix"}, status=400)
+
+        output_dir = Path(folder_paths.get_output_directory())
+        # prefix could be "ace-step/text2music" → search in output/ace-step/ for text2music*
+        if "/" in prefix:
+            parts = prefix.rsplit("/", 1)
+            search_dir = output_dir / parts[0]
+            file_prefix = parts[1]
+        else:
+            search_dir = output_dir
+            file_prefix = prefix
+
+        if not search_dir.exists():
+            return web.json_response({"error": "Directory not found"}, status=404)
+
+        # Find newest file matching prefix
+        audio_exts = {'.mp3', '.wav', '.ogg', '.flac', '.aac'}
+        matches = [f for f in search_dir.iterdir()
+                   if f.is_file() and f.name.startswith(file_prefix) and f.suffix.lower() in audio_exts]
+
+        if not matches:
+            return web.json_response({"error": "No matching files"}, status=404)
+
+        latest = max(matches, key=lambda f: f.stat().st_mtime)
+        # Return path relative to output dir
+        rel_path = latest.relative_to(output_dir)
+        subfolder = str(rel_path.parent) if rel_path.parent != Path(".") else ""
+
+        return web.json_response({
+            "filename": latest.name,
+            "subfolder": subfolder.replace("\\", "/"),
+            "type": "output"
+        })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
