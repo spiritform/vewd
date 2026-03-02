@@ -377,7 +377,9 @@ function createVewdWidget(node) {
             const vid = item.querySelector("video");
             vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
         } else if (type === "audio") {
-            item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
+            const waveformUrl = api.apiURL(`/vewd/waveform?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(sourceInfo?.subfolder || "")}&type=${sourceInfo?.type || "temp"}`);
+            item.innerHTML = `<img src="${waveformUrl}"><div class="media-icon">♪</div><audio src="${src}"></audio>`;
+            item.querySelector("img").addEventListener("error", () => { item.querySelector("img").replaceWith(Object.assign(document.createElement("div"), { className: "audio-icon", textContent: "♪" })); });
         } else if (type === "model") {
             if (thumbnail) {
                 item.innerHTML = `<img src="${thumbnail}"><div class="media-icon">🧊</div>`;
@@ -508,7 +510,8 @@ function createVewdWidget(node) {
             if (media.type === "video") {
                 content = `<video src="${media.src}" controls muted loop playsinline preload="auto"></video>`;
             } else if (media.type === "audio") {
-                content = `<div class="audio-preview"><span class="icon">♪</span><audio src="${media.src}" controls></audio></div>`;
+                const wfUrl = api.apiURL(`/vewd/waveform?filename=${encodeURIComponent(media.filename)}&subfolder=${encodeURIComponent(media.sourceInfo?.subfolder || "")}&type=${media.sourceInfo?.type || "temp"}`);
+                content = `<div class="audio-preview"><img src="${wfUrl}" style="width:100%;max-height:60%;object-fit:contain;border-radius:4px"><audio src="${media.src}" controls style="width:90%;margin-top:12px"></audio></div>`;
             } else if (media.type === "model") {
                 content = `<model-viewer src="${media.src}" camera-controls auto-rotate shadow-intensity="1" style="background-color:#444;width:100%;height:100%"></model-viewer>`;
             } else if (media.type === "splat") {
@@ -1003,7 +1006,9 @@ function createVewdWidget(node) {
                     vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
                     vid.addEventListener("error", () => tryFallback(vid, "video"), { once: true });
                 } else if (saved.type === "audio") {
-                    item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
+                    const waveformUrl = api.apiURL(`/vewd/waveform?filename=${encodeURIComponent(saved.filename)}&subfolder=${encodeURIComponent(si.subfolder || "")}&type=${si.type || "temp"}`);
+                    item.innerHTML = `<img src="${waveformUrl}"><div class="media-icon">♪</div><audio src="${src}"></audio>`;
+                    item.querySelector("img").addEventListener("error", () => { item.querySelector("img").replaceWith(Object.assign(document.createElement("div"), { className: "audio-icon", textContent: "♪" })); });
                 } else if (saved.type === "model") {
                     if (saved.thumbnail) {
                         item.innerHTML = `<img src="${saved.thumbnail}"><div class="media-icon">🧊</div>`;

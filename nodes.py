@@ -1,10 +1,11 @@
 import shutil
 import base64
 import io
+import struct
 import numpy as np
 import torch
 from pathlib import Path
-from PIL import Image, PngImagePlugin
+from PIL import Image, ImageDraw, PngImagePlugin
 import folder_paths
 from aiohttp import web
 from server import PromptServer
@@ -53,13 +54,35 @@ def extract_video_frames(video_path, max_frames=0):
 
 
 BINARY_EXTS = {'.glb', '.gltf', '.obj', '.ply', '.splat', '.stl'}
+MEDIA_EXTS = {'.mp4', '.webm', '.mov', '.avi', '.mkv', '.mp3', '.wav', '.ogg', '.flac', '.aac'}
+AUDIO_CONVERT_TO_MP3 = {'.flac', '.wav', '.ogg', '.aac'}  # Convert these to MP3 on save
 
 
 def copy_with_metadata(src_path, dst_path, seed=None):
     """Copy file, embedding seed as PNG metadata if applicable.
-    For 3D model files and non-PNG files, does a plain file copy."""
+    For audio files in AUDIO_CONVERT_TO_MP3, converts to MP3 via ffmpeg.
+    For 3D model files and other non-PNG files, does a plain file copy."""
     ext = Path(src_path).suffix.lower()
     if ext in BINARY_EXTS:
+        shutil.copy2(src_path, dst_path)
+        return
+    # Convert audio to MP3
+    if ext in AUDIO_CONVERT_TO_MP3:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(src_path), "-codec:a", "libmp3lame", "-q:a", "2", str(dst_path)],
+                capture_output=True, timeout=30
+            )
+            if result.returncode == 0:
+                return
+            print(f"[Vewd] ffmpeg conversion failed: {result.stderr.decode()[:200]}")
+        except Exception as e:
+            print(f"[Vewd] ffmpeg not available, copying as-is: {e}")
+        # Fallback: copy original if ffmpeg fails
+        shutil.copy2(src_path, Path(str(dst_path).rsplit('.', 1)[0] + ext))
+        return
+    if ext in MEDIA_EXTS:
         shutil.copy2(src_path, dst_path)
         return
     if seed and ext == '.png':
@@ -236,7 +259,14 @@ async def export_selects(request):
 
             if src_path.exists():
                 orig_ext = Path(filename).suffix.lower()
-                save_ext = orig_ext if orig_ext in BINARY_EXTS else ".png"
+                if orig_ext in BINARY_EXTS:
+                    save_ext = orig_ext
+                elif orig_ext in AUDIO_CONVERT_TO_MP3:
+                    save_ext = ".mp3"
+                elif orig_ext in MEDIA_EXTS:
+                    save_ext = orig_ext
+                else:
+                    save_ext = ".png"
                 if seed:
                     new_name = f"{prefix}_{seed}_{i + 1:03d}{save_ext}"
                 else:
@@ -296,9 +326,15 @@ async def save_images(request):
                 src_path = Path(folder) / filename
 
             if src_path.exists():
-                # Preserve original extension for non-image files (3D, video, audio)
                 orig_ext = Path(filename).suffix.lower()
-                save_ext = orig_ext if orig_ext in BINARY_EXTS else ".png"
+                if orig_ext in BINARY_EXTS:
+                    save_ext = orig_ext
+                elif orig_ext in AUDIO_CONVERT_TO_MP3:
+                    save_ext = ".mp3"
+                elif orig_ext in MEDIA_EXTS:
+                    save_ext = orig_ext
+                else:
+                    save_ext = ".png"
                 if seed:
                     # With seed: prefix_seed_001.ext
                     seed_key = seed
@@ -397,6 +433,98 @@ async def set_image(request):
         return web.json_response({"success": True})
     except Exception as e:
         return web.json_response({"success": False, "error": str(e)})
+
+
+WAVEFORM_COLORS = [
+    (100, 180, 255),  # blue
+    (255, 100, 130),  # pink
+    (100, 255, 160),  # green
+    (255, 200, 80),   # gold
+    (180, 120, 255),  # purple
+    (255, 140, 60),   # orange
+    (80, 220, 220),   # cyan
+    (255, 80, 80),    # red
+]
+
+
+def generate_waveform(audio_path, width=256, height=256):
+    """Generate a waveform thumbnail image from an audio file.
+    Uses ffmpeg to decode to raw PCM, then draws the waveform.
+    Color is deterministic per filename for consistency."""
+    try:
+        import subprocess
+        # Decode audio to raw 16-bit mono PCM via ffmpeg
+        result = subprocess.run(
+            ["ffmpeg", "-i", str(audio_path), "-f", "s16le", "-ac", "1", "-ar", "22050", "-"],
+            capture_output=True, timeout=15
+        )
+        if result.returncode != 0:
+            return None
+        raw = result.stdout
+        if len(raw) < 4:
+            return None
+        # Parse PCM samples
+        n_samples = len(raw) // 2
+        samples = np.array(struct.unpack(f"<{n_samples}h", raw[:n_samples * 2]), dtype=np.float32)
+        # Normalize
+        peak = np.max(np.abs(samples)) or 1.0
+        samples = samples / peak
+        # Downsample to width bins
+        bin_size = max(1, len(samples) // width)
+        bins = len(samples) // bin_size
+        trimmed = samples[:bins * bin_size].reshape(bins, bin_size)
+        maxes = np.max(trimmed, axis=1)
+        mins = np.min(trimmed, axis=1)
+        # Pick color based on filename hash
+        color = WAVEFORM_COLORS[hash(audio_path.name) % len(WAVEFORM_COLORS)]
+        # Draw
+        img = Image.new("RGB", (width, height), (17, 17, 17))
+        draw = ImageDraw.Draw(img)
+        mid = height // 2
+        for x in range(min(bins, width)):
+            y_top = int(mid - maxes[x] * mid * 0.9)
+            y_bot = int(mid - mins[x] * mid * 0.9)
+            draw.line([(x, y_top), (x, y_bot)], fill=color)
+        # Center line
+        draw.line([(0, mid), (width - 1, mid)], fill=(60, 60, 60))
+        return img
+    except Exception as e:
+        print(f"[Vewd] Waveform generation failed: {e}")
+        return None
+
+
+@PromptServer.instance.routes.get("/vewd/waveform")
+async def get_waveform(request):
+    """Generate and return a waveform thumbnail for an audio file."""
+    try:
+        filename = request.query.get("filename", "")
+        subfolder = request.query.get("subfolder", "")
+        source_type = request.query.get("type", "temp")
+
+        if not filename:
+            return web.json_response({"error": "Missing filename"}, status=400)
+
+        type_dirs = {
+            "temp": folder_paths.get_temp_directory(),
+            "output": folder_paths.get_output_directory(),
+            "input": folder_paths.get_input_directory(),
+        }
+        base_dir = type_dirs.get(source_type, folder_paths.get_temp_directory())
+        audio_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
+
+        if not audio_path.exists():
+            return web.json_response({"error": "File not found"}, status=404)
+
+        img = generate_waveform(audio_path)
+        if img is None:
+            return web.json_response({"error": "Waveform generation failed"}, status=500)
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return web.Response(body=buf.read(), content_type="image/png")
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 NODE_CLASS_MAPPINGS = {
