@@ -969,12 +969,41 @@ function createVewdWidget(node) {
                 const item = document.createElement("div");
                 item.className = "vewd-item";
 
+                // Rebuild URL fresh from sourceInfo (stale cache-buster or moved files)
+                const si = saved.sourceInfo || {};
+                const freshSrc = api.apiURL(`/view?filename=${encodeURIComponent(saved.filename)}&subfolder=${encodeURIComponent(si.subfolder || "")}&type=${si.type || "temp"}&t=${Date.now()}`);
+                const src = freshSrc;
+
+                // For images/videos, try fallback location if primary fails
+                function tryFallback(el, tag) {
+                    const altType = si.type === "temp" ? "output" : "temp";
+                    const fallbackSrc = api.apiURL(`/view?filename=${encodeURIComponent(saved.filename)}&subfolder=${encodeURIComponent(si.subfolder || "")}&type=${altType}&t=${Date.now()}`);
+                    el[tag === "img" ? "src" : "src"] = fallbackSrc;
+                    // If fallback also fails, remove the item
+                    el.addEventListener("error", () => {
+                        const idx = state.images.findIndex(img => img.el === item);
+                        if (idx < 0) return;
+                        item.remove();
+                        state.images.splice(idx, 1);
+                        const newTagged = new Set();
+                        state.tagged.forEach(i => { if (i < idx) newTagged.add(i); else if (i > idx) newTagged.add(i - 1); });
+                        state.tagged = newTagged;
+                        state.images.forEach((img, i) => { img.el.onclick = (e) => handleClick(i, e); });
+                        if (state.focusIndex >= state.images.length) state.focusIndex = state.images.length - 1;
+                        state.selected.clear();
+                        if (state.focusIndex >= 0) state.selected.add(state.focusIndex);
+                        update();
+                        persistState();
+                    }, { once: true });
+                }
+
                 if (saved.type === "video") {
-                    item.innerHTML = `<video src="${saved.src}" muted playsinline preload="auto"></video><div class="media-icon">▶</div>`;
+                    item.innerHTML = `<video src="${src}" muted playsinline preload="auto"></video><div class="media-icon">▶</div>`;
                     const vid = item.querySelector("video");
                     vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
+                    vid.addEventListener("error", () => tryFallback(vid, "video"), { once: true });
                 } else if (saved.type === "audio") {
-                    item.innerHTML = `<div class="audio-icon">♪</div><audio src="${saved.src}"></audio>`;
+                    item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
                 } else if (saved.type === "model") {
                     if (saved.thumbnail) {
                         item.innerHTML = `<img src="${saved.thumbnail}"><div class="media-icon">🧊</div>`;
@@ -988,12 +1017,14 @@ function createVewdWidget(node) {
                         item.innerHTML = `<div class="splat-icon">💠</div>`;
                     }
                 } else {
-                    item.innerHTML = `<img src="${saved.src}">`;
+                    item.innerHTML = `<img src="${src}">`;
+                    const img = item.querySelector("img");
+                    if (img) img.addEventListener("error", () => tryFallback(img, "img"), { once: true });
                 }
 
                 item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
                 grid.appendChild(item);
-                state.images.push({ src: saved.src, filename: saved.filename, type: saved.type, el: item, sourceInfo: saved.sourceInfo, thumbnail: saved.thumbnail || null });
+                state.images.push({ src, filename: saved.filename, type: saved.type, el: item, sourceInfo: saved.sourceInfo, thumbnail: saved.thumbnail || null });
             });
 
             // Bind click handlers
