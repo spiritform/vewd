@@ -281,7 +281,8 @@ document.head.appendChild(style);
 
 // Widget factory
 function createVewdWidget(node) {
-    const nodeId = node.id;
+    // Use getter — node.id may not be final at creation time
+    const getNodeId = () => node.id;
     const seenImages = new Set();
     const state = {
         images: [],
@@ -439,6 +440,49 @@ function createVewdWidget(node) {
         update();
     }
 
+    function sendVideoInfo(media) {
+        const info = {
+            node_id: String(getNodeId()),
+            filename: media.filename,
+            subfolder: media.sourceInfo?.subfolder || "",
+            type: media.sourceInfo?.type || "temp",
+        };
+        api.fetchApi("/vewd/set_video", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(info)
+        }).catch(e => console.warn("[Vewd] Video info send failed:", e));
+    }
+
+    function clearVideoInfo() {
+        api.fetchApi("/vewd/set_video", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ node_id: String(getNodeId()), filename: "" })
+        }).catch(e => console.warn("[Vewd] Video info clear failed:", e));
+    }
+
+    function sendImageInfo(media) {
+        api.fetchApi("/vewd/set_image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                node_id: String(getNodeId()),
+                filename: media.filename,
+                subfolder: media.sourceInfo?.subfolder || "",
+                type: media.sourceInfo?.type || "temp",
+            })
+        }).catch(e => console.warn("[Vewd] Image info send failed:", e));
+    }
+
+    function clearImageInfo() {
+        api.fetchApi("/vewd/set_image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ node_id: String(getNodeId()), filename: "" })
+        }).catch(e => console.warn("[Vewd] Image info clear failed:", e));
+    }
+
     function update() {
         state.images.forEach((img, i) => {
             img.el.classList.toggle("selected", state.selected.has(i));
@@ -490,30 +534,8 @@ function createVewdWidget(node) {
             api.fetchApi("/vewd/screenshot", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ image: dataUrl, node_id: String(nodeId) })
+                body: JSON.stringify({ image: dataUrl, node_id: String(getNodeId()) })
             }).catch(e => console.warn("[Vewd] Screenshot upload failed:", e));
-        }
-
-        function sendVideoInfo(media) {
-            const info = {
-                node_id: String(nodeId),
-                filename: media.filename,
-                subfolder: media.sourceInfo?.subfolder || "",
-                type: media.sourceInfo?.type || "temp",
-            };
-            api.fetchApi("/vewd/set_video", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(info)
-            }).catch(e => console.warn("[Vewd] Video info send failed:", e));
-        }
-
-        function clearVideoInfo() {
-            api.fetchApi("/vewd/set_video", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ node_id: String(nodeId), filename: "" })
-            }).catch(e => console.warn("[Vewd] Video info clear failed:", e));
         }
 
         // Listen for screenshot messages from splat viewer iframe
@@ -577,14 +599,14 @@ function createVewdWidget(node) {
                         uploadPreviewAsOutput(pane, media);
                     }, { once: true });
                 }
-            } else {
-                // For images/audio, clear video info and upload preview
+            } else if (media.type === "image") {
+                // For images, send file info for direct-from-disk loading
                 clearVideoInfo();
-                const el = pane.querySelector("img");
-                if (el) {
-                    const onReady = () => uploadPreviewAsOutput(pane, media);
-                    el.complete ? onReady() : el.addEventListener("load", onReady, { once: true });
-                }
+                sendImageInfo(media);
+            } else {
+                // For audio/other, just clear video and image info
+                clearVideoInfo();
+                clearImageInfo();
             }
         }
 
@@ -927,7 +949,7 @@ function createVewdWidget(node) {
                     return `${img.filename}_${subfolder}`;
                 })
             };
-            localStorage.setItem(`vewd_state_${nodeId}`, JSON.stringify(data));
+            localStorage.setItem(`vewd_state_${getNodeId()}`, JSON.stringify(data));
         } catch (e) {
             console.warn("[Vewd] Failed to persist state:", e);
         }
@@ -935,7 +957,7 @@ function createVewdWidget(node) {
 
     function restoreState() {
         try {
-            const raw = localStorage.getItem(`vewd_state_${nodeId}`);
+            const raw = localStorage.getItem(`vewd_state_${getNodeId()}`);
             if (!raw) return;
             const data = JSON.parse(raw);
             if (!data?.images?.length) return;
@@ -1088,7 +1110,33 @@ function createVewdWidget(node) {
     });
     el.addEventListener("drop", handleDrop);
 
-    return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput, seenImages, restoreState, persistState };
+    // Sync current selection to backend stores (called before workflow queue)
+    // Uses synchronous XHR to ensure data arrives before process() runs
+    function syncToBackend() {
+        if (state.focusIndex < 0 || !state.images.length) return;
+        const media = state.images[state.focusIndex];
+        if (!media) return;
+        let endpoint, payload;
+        if (media.type === "video") {
+            endpoint = "/vewd/set_video";
+            payload = { node_id: String(getNodeId()), filename: media.filename, subfolder: media.sourceInfo?.subfolder || "", type: media.sourceInfo?.type || "temp" };
+        } else if (media.type === "image") {
+            endpoint = "/vewd/set_image";
+            payload = { node_id: String(getNodeId()), filename: media.filename, subfolder: media.sourceInfo?.subfolder || "", type: media.sourceInfo?.type || "temp" };
+        } else {
+            return;
+        }
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", endpoint, false); // synchronous
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify(payload));
+        } catch (e) {
+            console.warn("[Vewd] syncToBackend failed:", e);
+        }
+    }
+
+    return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput, seenImages, restoreState, persistState, syncToBackend };
 }
 
 // Global widget reference
@@ -1110,6 +1158,8 @@ app.registerExtension({
                     const body = JSON.parse(options.body);
                     if (body.prompt) lastPromptData = body.prompt;
                 } catch (e) {}
+                // Sync current image/video info to backend before workflow runs
+                if (globalVewdWidget) globalVewdWidget.syncToBackend();
             }
             return origFetchApi(url, options, ...rest);
         };
@@ -1117,7 +1167,7 @@ app.registerExtension({
         // Walk backwards from a node through prompt dependency graph to find its seed
         function findSeedForNode(prompt, nodeId) {
             const visited = new Set();
-            const queue = [String(nodeId)];
+            const queue = [String(getNodeId())];
             while (queue.length) {
                 const id = queue.shift();
                 if (visited.has(id)) continue;
@@ -1140,7 +1190,7 @@ app.registerExtension({
         // Walk backwards from a node to find a source image filename (e.g. LoadImage node)
         function findImageForNode(prompt, nodeId) {
             const visited = new Set();
-            const queue = [String(nodeId)];
+            const queue = [String(getNodeId())];
             while (queue.length) {
                 const id = queue.shift();
                 if (visited.has(id)) continue;

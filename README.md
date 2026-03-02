@@ -88,6 +88,13 @@ Point it at any folder of images, videos, or audio. Opens a browser-based viewer
 
 ## What's New
 
+### v1.4.2 — IMAGE Output & Splat Camera Lock
+
+- **IMAGE output works like LoadImage** — Selected image loaded directly from disk, reliable with all downstream nodes
+- **Splat camera lock** — Lock/Unlock toggle freezes the splat view; camera state saved and restored on re-select
+- **Pre-queue sync** — Image/video info sent to backend before every workflow run, survives restarts
+- **Node ID fix** — Fixed `node.id` not being set at widget creation time (was `-1`)
+
 ### v1.4.0 — Gaussian Splat Support & Import
 
 - **Gaussian splat viewer** — Interactive `.ply` and `.splat` preview with orbit/zoom controls
@@ -95,7 +102,7 @@ Point it at any folder of images, videos, or audio. Opens a browser-based viewer
 - **Import & drag-drop** — Drag files from Windows explorer or images from browsers (Pinterest, Google Images) directly into the viewer
 - **Import button** — File picker for importing external reference images and videos
 - **Filter-aware delete** — Deleting items while filtered now selects the next visible item instead of jumping to a hidden one
-- **IMAGE output** — Selected preview is uploaded as an IMAGE output for downstream nodes (images and video frames)
+- **IMAGE output** — Selected image passed to downstream nodes (loaded from disk like LoadImage)
 - **VIDEO output** — Full video file info passed to downstream nodes for frame extraction
 
 ### v1.1.0 — 3D Model Support

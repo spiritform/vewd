@@ -16,11 +16,14 @@ except ImportError:
     HAS_CV2 = False
     print("[Vewd] cv2 not available — video frame extraction disabled, will use screenshot fallback")
 
-# Store latest screenshot per node for IMAGE output
+# Store latest screenshot per node for IMAGE output (splat fallback)
 _screenshot_store = {}
 
 # Store active video file info per node for full-frame extraction
 _video_store = {}
+
+# Store active image file info per node for direct-from-disk loading
+_image_store = {}
 
 
 def extract_video_frames(video_path, max_frames=0):
@@ -101,7 +104,6 @@ class Vewd:
     RETURN_NAMES = ("output",)
     FUNCTION = "process"
     CATEGORY = "image"
-    OUTPUT_NODE = True
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
@@ -113,7 +115,7 @@ class Vewd:
         img_tensor = None
         node_key = str(unique_id) if unique_id else None
 
-        # Priority: wired input > video store > screenshot store > black fallback
+        # Priority: wired input > video store > image store > screenshot store > black fallback
         if input is not None:
             img_tensor = input
         elif node_key and node_key in _video_store and HAS_CV2:
@@ -137,6 +139,29 @@ class Vewd:
                     print(f"[Vewd] Video file not found: {video_path}")
             except Exception as e:
                 print(f"[Vewd] Video extraction failed: {e}")
+
+        if img_tensor is None and node_key and node_key in _image_store:
+            image_info = _image_store[node_key]
+            try:
+                type_dirs = {
+                    "temp": folder_paths.get_temp_directory(),
+                    "output": folder_paths.get_output_directory(),
+                    "input": folder_paths.get_input_directory(),
+                }
+                base_dir = type_dirs.get(image_info.get("type", "temp"), folder_paths.get_temp_directory())
+                subfolder = image_info.get("subfolder", "")
+                filename = image_info["filename"]
+                img_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
+
+                if img_path.exists():
+                    img = Image.open(img_path).convert("RGB")
+                    img_array = np.array(img).astype(np.float32) / 255.0
+                    img_tensor = torch.from_numpy(img_array).unsqueeze(0)
+                    print(f"[Vewd] Loaded image from disk: {img_path.name} ({img.size[0]}x{img.size[1]})")
+                else:
+                    print(f"[Vewd] Image file not found: {img_path}")
+            except Exception as e:
+                print(f"[Vewd] Image load failed: {e}")
 
         if img_tensor is None and node_key and node_key in _screenshot_store:
             img_data = _screenshot_store[node_key]
@@ -339,6 +364,35 @@ async def set_video(request):
             "subfolder": data.get("subfolder", ""),
             "type": data.get("type", "temp"),
         }
+
+        return web.json_response({"success": True})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)})
+
+
+# Image file info endpoint — stores which image is selected for direct loading
+@PromptServer.instance.routes.post("/vewd/set_image")
+async def set_image(request):
+    try:
+        data = await request.json()
+        node_id = str(data.get("node_id", ""))
+        filename = data.get("filename", "")
+
+        if not node_id:
+            return web.json_response({"success": False, "error": "Missing node_id"})
+
+        if not filename:
+            _image_store.pop(node_id, None)
+            return web.json_response({"success": True, "cleared": True})
+
+        _image_store[node_id] = {
+            "filename": filename,
+            "subfolder": data.get("subfolder", ""),
+            "type": data.get("type", "temp"),
+        }
+
+        # Image selected — clear video store for this node
+        _video_store.pop(node_id, None)
 
         return web.json_response({"success": True})
     except Exception as e:
