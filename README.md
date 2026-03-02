@@ -88,6 +88,10 @@ Point it at any folder of images, videos, or audio. Opens a browser-based viewer
 
 ## What's New
 
+### v1.4.3 — Capture Fix
+
+- **Fixed auto-capture** — Generated images from workflow now correctly appear in the Vewd grid again
+
 ### v1.4.2 — IMAGE Output & Splat Camera Lock
 
 - **IMAGE output works like LoadImage** — Selected image loaded directly from disk, reliable with all downstream nodes
