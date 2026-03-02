@@ -1167,7 +1167,7 @@ app.registerExtension({
         // Walk backwards from a node through prompt dependency graph to find its seed
         function findSeedForNode(prompt, nodeId) {
             const visited = new Set();
-            const queue = [String(getNodeId())];
+            const queue = [String(nodeId)];
             while (queue.length) {
                 const id = queue.shift();
                 if (visited.has(id)) continue;
@@ -1190,7 +1190,7 @@ app.registerExtension({
         // Walk backwards from a node to find a source image filename (e.g. LoadImage node)
         function findImageForNode(prompt, nodeId) {
             const visited = new Set();
-            const queue = [String(getNodeId())];
+            const queue = [String(nodeId)];
             while (queue.length) {
                 const id = queue.shift();
                 if (visited.has(id)) continue;
@@ -1216,9 +1216,13 @@ app.registerExtension({
             const output = detail?.output;
 
             // Resolve seed from the dependency chain of the node that produced output
-            if (lastPromptData && detail?.node) {
-                const seed = findSeedForNode(lastPromptData, detail.node);
-                if (seed) lastSeed = seed;
+            try {
+                if (lastPromptData && detail?.node) {
+                    const seed = findSeedForNode(lastPromptData, detail.node);
+                    if (seed) lastSeed = seed;
+                }
+            } catch (e) {
+                console.warn("[Vewd] Seed lookup failed:", e);
             }
 
             // Detect media type from filename extension
@@ -1242,9 +1246,12 @@ app.registerExtension({
                 const mediaType = detectType(item.filename) !== "image" ? detectType(item.filename) : fallbackType;
                 const src = api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}&type=${item.type || "temp"}&t=${Date.now()}`);
                 // For 3D models/splats, find source image from prompt graph if no thumbnail provided
-                if ((mediaType === "model" || mediaType === "splat") && !thumbnail && lastPromptData && detail?.node) {
-                    thumbnail = findImageForNode(lastPromptData, detail.node);
-                    console.log("[Vewd] Thumbnail lookup for", mediaType, "node", detail.node, "→", thumbnail ? "found" : "not found");
+                try {
+                    if ((mediaType === "model" || mediaType === "splat") && !thumbnail && lastPromptData && detail?.node) {
+                        thumbnail = findImageForNode(lastPromptData, detail.node);
+                    }
+                } catch (e) {
+                    console.warn("[Vewd] Thumbnail lookup failed:", e);
                 }
                 const sourceInfo = { subfolder: item.subfolder || "", type: item.type || "temp", seed: lastSeed };
                 if (extraData) Object.assign(sourceInfo, extraData);
