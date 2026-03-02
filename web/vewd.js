@@ -88,7 +88,7 @@ style.textContent = `
         position: absolute;
         top: 3px;
         right: 4px;
-        color: #ff4a6a;
+        color: #fff;
         font-size: 14px;
         text-shadow: 0 0 2px rgba(0,0,0,0.8);
     }
@@ -142,7 +142,7 @@ style.textContent = `
         position: absolute;
         top: 12px;
         right: 14px;
-        color: #ff4a6a;
+        color: #fff;
         font-size: 20px;
         text-shadow: 0 0 4px rgba(0,0,0,0.8);
         display: none;
@@ -280,7 +280,7 @@ style.textContent = `
         line-height: 1.3;
     }
     .vewd-bar button:hover { background: #333; color: #aaa; }
-    .vewd-bar button.on { background: #ff4a6a; color: #fff; }
+    .vewd-bar button.on { background: #fff; color: #111; }
     .vewd-bar .save-btn { background: #333; color: #aaa; }
     .vewd-bar .save-btn:hover { background: #444; color: #ccc; }
     .vewd-bar .flash { background: #fff !important; color: #111 !important; transition: none; }
@@ -340,7 +340,8 @@ function createVewdWidget(node) {
         tagged: new Set(),
         filterOn: false,
         typeFilter: "all",
-        autoExport: false
+        autoExport: false,
+        locked: false
     };
 
     const el = document.createElement("div");
@@ -370,6 +371,7 @@ function createVewdWidget(node) {
                 <button class="type-filter" data-type="model">3d</button>
             </div>
             <span class="count">0</span>
+            <button class="lock-btn" title="Lock selection — prevent auto-select on new images"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
             <button class="import-btn">import</button>
             <input type="file" class="import-input" multiple accept="image/*,video/*" style="display:none">
             <button class="clear-btn">clear</button>
@@ -390,6 +392,7 @@ function createVewdWidget(node) {
     const clearBtn = el.querySelector(".clear-btn");
     const saveBtn = el.querySelector(".save-btn");
     const autoExportBtn = el.querySelector(".auto-export-btn");
+    const lockBtn = el.querySelector(".lock-btn");
     const fullscreenBtn = el.querySelector(".fullscreen-btn");
     const logoBtn = el.querySelector(".vewd-logo");
     const folderInput = el.querySelector(".folder-input");
@@ -472,8 +475,8 @@ function createVewdWidget(node) {
 
         if (state.focusIndex >= 0) state.focusIndex++;
 
-        // Auto-select only if nothing is currently selected
-        if (state.focusIndex < 0) {
+        // Auto-select newest unless locked
+        if (!state.locked) {
             state.selected.clear();
             state.selected.add(0);
             state.focusIndex = 0;
@@ -750,6 +753,9 @@ function createVewdWidget(node) {
         saveBtn.textContent = saveCount > 0 ? `save (${saveCount})` : "save";
 
         autoExportBtn.classList.toggle("on", state.autoExport);
+        lockBtn.classList.toggle("on", state.locked);
+        const lockSvg = lockBtn.querySelector("svg rect");
+        if (lockSvg) lockSvg.setAttribute("fill", state.locked ? "currentColor" : "none");
 
         // Show filename of focused item
         const filenameEl = el.querySelector(".filename-display");
@@ -1046,6 +1052,7 @@ function createVewdWidget(node) {
     };
     saveBtn.onclick = saveImages;
     autoExportBtn.onclick = () => { state.autoExport = !state.autoExport; update(); };
+    lockBtn.onclick = () => { state.locked = !state.locked; update(); };
     fullscreenBtn.onclick = toggleFullscreen;
     logoBtn.onclick = () => window.open("https://x.com/spiritform", "_blank");
 
