@@ -413,9 +413,12 @@ function createVewdWidget(node) {
 
         if (state.focusIndex >= 0) state.focusIndex++;
 
-        state.selected.clear();
-        state.selected.add(0);
-        state.focusIndex = 0;
+        // Auto-select only if nothing is currently selected
+        if (state.focusIndex < 0) {
+            state.selected.clear();
+            state.selected.add(0);
+            state.focusIndex = 0;
+        }
 
         update();
         persistState();
