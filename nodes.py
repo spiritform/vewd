@@ -436,14 +436,14 @@ async def set_image(request):
 
 
 WAVEFORM_COLORS = [
-    (100, 180, 255),  # blue
-    (255, 100, 130),  # pink
-    (100, 255, 160),  # green
-    (255, 200, 80),   # gold
-    (180, 120, 255),  # purple
-    (255, 140, 60),   # orange
-    (80, 220, 220),   # cyan
-    (255, 80, 80),    # red
+    (70, 130, 200),   # blue
+    (200, 75, 100),   # pink
+    (70, 190, 120),   # green
+    (200, 160, 60),   # gold
+    (140, 90, 200),   # purple
+    (200, 110, 50),   # orange
+    (60, 170, 170),   # cyan
+    (200, 65, 65),    # red
 ]
 
 
@@ -482,11 +482,11 @@ def generate_waveform(audio_path, width=256, height=256):
         draw = ImageDraw.Draw(img)
         mid = height // 2
         for x in range(min(bins, width)):
-            y_top = int(mid - maxes[x] * mid * 0.9)
-            y_bot = int(mid - mins[x] * mid * 0.9)
+            y_top = int(mid - maxes[x] * mid * 0.75)
+            y_bot = int(mid - mins[x] * mid * 0.75)
             draw.line([(x, y_top), (x, y_bot)], fill=color)
         # Center line
-        draw.line([(0, mid), (width - 1, mid)], fill=(60, 60, 60))
+        draw.line([(0, mid), (width - 1, mid)], fill=(40, 40, 40))
         return img
     except Exception as e:
         print(f"[Vewd] Waveform generation failed: {e}")
@@ -515,7 +515,7 @@ async def get_waveform(request):
         if not audio_path.exists():
             return web.json_response({"error": "File not found"}, status=404)
 
-        img = generate_waveform(audio_path)
+        img = generate_waveform(audio_path, width=800, height=200)
         if img is None:
             return web.json_response({"error": "Waveform generation failed"}, status=500)
 

@@ -152,10 +152,61 @@ style.textContent = `
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 20px;
-        color: #666;
+        justify-content: center;
         width: 100%;
+        height: 100%;
+        padding: 0 0 12px 0;
+        box-sizing: border-box;
     }
+    .vewd-pane .audio-preview .waveform-wrap {
+        position: relative;
+        width: 100%;
+        border-radius: 6px;
+        overflow: hidden;
+        cursor: pointer;
+    }
+    .vewd-pane .audio-preview .waveform-wrap img {
+        width: 100%;
+        display: block;
+        min-height: 120px;
+    }
+    .vewd-pane .audio-preview .waveform-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 0%;
+        background: rgba(255,255,255,0.08);
+        pointer-events: none;
+        transition: none;
+    }
+    .vewd-pane .audio-preview .waveform-playhead {
+        position: absolute;
+        top: 0;
+        left: 0%;
+        height: 100%;
+        width: 2px;
+        background: rgba(255,255,255,0.5);
+        pointer-events: none;
+    }
+    .vewd-pane .audio-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        color: #888;
+        font-size: 13px;
+    }
+    .vewd-pane .audio-controls button {
+        background: #222;
+        border: 1px solid #333;
+        color: #ccc;
+        padding: 6px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .vewd-pane .audio-controls button:hover { background: #333; }
     .vewd-toast {
         position: absolute;
         top: 50%;
@@ -172,9 +223,6 @@ style.textContent = `
         transition: opacity 0.3s;
     }
     .vewd-toast.show { opacity: 1; }
-
-    .vewd-pane .audio-preview .icon { font-size: 64px; }
-    .vewd-pane .audio-preview audio { width: 80%; height: 40px; }
 
     .vewd-pane model-viewer {
         width: 100%;
@@ -511,7 +559,18 @@ function createVewdWidget(node) {
                 content = `<video src="${media.src}" controls muted loop playsinline preload="auto"></video>`;
             } else if (media.type === "audio") {
                 const wfUrl = api.apiURL(`/vewd/waveform?filename=${encodeURIComponent(media.filename)}&subfolder=${encodeURIComponent(media.sourceInfo?.subfolder || "")}&type=${media.sourceInfo?.type || "temp"}`);
-                content = `<div class="audio-preview"><img src="${wfUrl}" style="width:100%;max-height:60%;object-fit:contain;border-radius:4px"><audio src="${media.src}" controls style="width:90%;margin-top:12px"></audio></div>`;
+                content = `<div class="audio-preview">
+                    <div class="waveform-wrap" data-audio-seek>
+                        <img src="${wfUrl}">
+                        <div class="waveform-progress"></div>
+                        <div class="waveform-playhead"></div>
+                    </div>
+                    <div class="audio-controls">
+                        <button data-audio-play>▶ Play</button>
+                        <span data-audio-time>0:00 / --:--</span>
+                    </div>
+                    <audio src="${media.src}" preload="auto"></audio>
+                </div>`;
             } else if (media.type === "model") {
                 content = `<model-viewer src="${media.src}" camera-controls auto-rotate shadow-intensity="1" style="background-color:#444;width:100%;height:100%"></model-viewer>`;
             } else if (media.type === "splat") {
@@ -609,8 +668,43 @@ function createVewdWidget(node) {
                 // For images, send file info for direct-from-disk loading
                 clearVideoInfo();
                 sendImageInfo(media);
+            } else if (media.type === "audio") {
+                clearVideoInfo();
+                clearImageInfo();
+                // Wire up custom audio player
+                const audio = pane.querySelector("audio");
+                const playBtn = pane.querySelector("[data-audio-play]");
+                const timeSpan = pane.querySelector("[data-audio-time]");
+                const waveWrap = pane.querySelector("[data-audio-seek]");
+                const progress = pane.querySelector(".waveform-progress");
+                const playhead = pane.querySelector(".waveform-playhead");
+                if (audio && playBtn) {
+                    function fmt(s) { const m = Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2,"0")}`; }
+                    audio.addEventListener("loadedmetadata", () => {
+                        timeSpan.textContent = `0:00 / ${fmt(audio.duration)}`;
+                    });
+                    audio.addEventListener("timeupdate", () => {
+                        const pct = audio.duration ? (audio.currentTime / audio.duration * 100) : 0;
+                        progress.style.width = pct + "%";
+                        playhead.style.left = pct + "%";
+                        timeSpan.textContent = `${fmt(audio.currentTime)} / ${fmt(audio.duration || 0)}`;
+                    });
+                    audio.addEventListener("ended", () => { playBtn.textContent = "▶ Play"; });
+                    playBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (audio.paused) { audio.play(); playBtn.textContent = "⏸ Pause"; }
+                        else { audio.pause(); playBtn.textContent = "▶ Play"; }
+                    };
+                    if (waveWrap) {
+                        waveWrap.onclick = (e) => {
+                            e.stopPropagation();
+                            const rect = waveWrap.getBoundingClientRect();
+                            const pct = (e.clientX - rect.left) / rect.width;
+                            if (audio.duration) audio.currentTime = pct * audio.duration;
+                        };
+                    }
+                }
             } else {
-                // For audio/other, just clear video and image info
                 clearVideoInfo();
                 clearImageInfo();
             }
