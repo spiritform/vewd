@@ -88,6 +88,14 @@ Point it at any folder of images, videos, or audio. Opens a browser-based viewer
 
 ## What's New
 
+### v1.5.0 — Audio Player & Waveforms
+
+- **Waveform thumbnails** — Audio files show colored waveform in the grid instead of a plain icon
+- **Custom audio player** — Full-width waveform with click-to-seek, playhead, and play/pause controls
+- **Save as MP3** — FLAC/WAV/OGG/AAC automatically converted to MP3 via ffmpeg on save/export
+- **Resilient restore** — Rebuilt URLs on refresh with fallback if files moved between temp/output
+- **New captures don't steal focus** — Grid stays on your current selection while new items come in
+
 ### v1.4.3 — Capture Fix
 
 - **Fixed auto-capture** — Generated images from workflow now correctly appear in the Vewd grid again
