@@ -96,6 +96,7 @@
 <body>
     <div id="viewerContainer">
         <canvas id="canvas"></canvas>
+        <img id="lockOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;display:none;pointer-events:auto;cursor:default;">
         <div id="error" class="error hidden"></div>
     </div>
 
@@ -105,7 +106,7 @@
             <input type="number" id="gaussianScaleValue" min="0.01" max="100" step="0.1" value="1.0" title="Gaussian scale multiplier">
         </div>
         <button id="resetCamera" title="Reset camera view">Reset View</button>
-        <button id="screenshot" title="Take screenshot">Screenshot</button>
+        <button id="screenshot" title="Lock/unlock camera view">Lock</button>
     </div>
 
     <!-- Load bundled gsplat.js -->
@@ -141,6 +142,10 @@
                 camera = new SPLAT.Camera();
                 renderer = new SPLAT.WebGLRenderer(canvas);
                 controls = new SPLAT.OrbitControls(camera, canvas);
+
+                // Patch setCameraTarget to track the orbit target
+                const _origSetTarget = controls.setCameraTarget.bind(controls);
+                controls.setCameraTarget = (v) => { lastKnownTarget = new SPLAT.Vector3(v.x, v.y, v.z); _origSetTarget(v); };
 
                 camera.data.fx = DEFAULT_FOCAL_LENGTH;
                 camera.data.fy = DEFAULT_FOCAL_LENGTH;
@@ -312,6 +317,20 @@
             }
         }
 
+        // Track orbit target (OrbitControls stores it in a closure, not exposed)
+        let lastKnownTarget = new SPLAT.Vector3(0, 0, 0);
+        const _origSetCameraTarget = null; // patched after controls init
+
+        function getCameraState() {
+            if (!camera || !controls) return null;
+            return {
+                px: camera.position.x, py: camera.position.y, pz: camera.position.z,
+                tx: lastKnownTarget.x, ty: lastKnownTarget.y, tz: lastKnownTarget.z,
+                fx: camera.data.fx, fy: camera.data.fy,
+                scale: currentScale
+            };
+        }
+
         function takeScreenshot() {
             if (!renderer) return;
             try {
@@ -319,6 +338,7 @@
                 window.parent.postMessage({
                     type: 'SCREENSHOT',
                     image: dataUrl,
+                    cameraState: getCameraState(),
                     timestamp: Date.now()
                 }, '*');
                 console.log('[VewdSplat] Screenshot captured');
@@ -396,12 +416,38 @@
 
         scaleInput.addEventListener('change', (e) => updateGaussianScale(e.target.value));
 
-        document.getElementById('resetCamera').addEventListener('click', () => { resetCamera(); debouncedScreenshot(); });
-        document.getElementById('screenshot').addEventListener('click', takeScreenshot);
+        const lockOverlay = document.getElementById('lockOverlay');
+        const screenshotBtn = document.getElementById('screenshot');
+        let isLocked = false;
+
+        function toggleLock() {
+            isLocked = !isLocked;
+            if (isLocked) {
+                // Freeze: capture screenshot, show overlay, disable orbit
+                const dataUrl = canvas.toDataURL('image/png');
+                lockOverlay.src = dataUrl;
+                lockOverlay.style.display = 'block';
+                screenshotBtn.textContent = 'Unlock';
+                screenshotBtn.style.background = '#ff4a6a';
+                takeScreenshot(); // send to parent
+            } else {
+                // Unfreeze: hide overlay, re-enable orbit
+                lockOverlay.style.display = 'none';
+                screenshotBtn.textContent = 'Lock';
+                screenshotBtn.style.background = '';
+            }
+        }
+
+        document.getElementById('resetCamera').addEventListener('click', () => {
+            if (isLocked) return;
+            resetCamera(); debouncedScreenshot();
+        });
+        screenshotBtn.addEventListener('click', toggleLock);
 
         // Auto-screenshot after orbit/zoom/scale changes (debounced 500ms)
         let screenshotTimer = null;
         function debouncedScreenshot() {
+            if (isLocked) return;
             clearTimeout(screenshotTimer);
             screenshotTimer = setTimeout(() => {
                 if (currentSplat) takeScreenshot();
@@ -417,6 +463,17 @@
 
             if (type === 'REQUEST_SCREENSHOT') {
                 takeScreenshot();
+            } else if (type === 'RESTORE_CAMERA' && event.data.cameraState) {
+                const cs = event.data.cameraState;
+                if (camera && controls) {
+                    camera.position.x = cs.px; camera.position.y = cs.py; camera.position.z = cs.pz;
+                    if (cs.fx) camera.data.fx = cs.fx;
+                    if (cs.fy) camera.data.fy = cs.fy;
+                    controls.setCameraTarget(new SPLAT.Vector3(cs.tx, cs.ty, cs.tz));
+                    controls.update();
+                    if (cs.scale != null) updateGaussianScale(cs.scale);
+                    console.log('[VewdSplat] Camera restored');
+                }
             } else if (type === 'LOAD_MESH_DATA' && data) {
                 console.log('[VewdSplat] Received LOAD_MESH_DATA, size:', data.byteLength, 'extrinsics:', !!extrinsics, 'intrinsics:', !!intrinsics);
                 loadPLYFromData(data, filename || 'gaussian.ply', extrinsics, intrinsics);

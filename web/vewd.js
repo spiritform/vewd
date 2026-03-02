@@ -272,10 +272,9 @@ style.textContent = `
         font-size: 13px;
     }
 
-    .vewd-preview-area.drop-hover {
+    .vewd-container.drop-hover {
         outline: 2px dashed #777;
         outline-offset: -4px;
-        background: rgba(255,255,255,0.03);
     }
 `;
 document.head.appendChild(style);
@@ -475,34 +474,16 @@ function createVewdWidget(node) {
 
         // Upload the currently viewed preview as IMAGE output for downstream nodes
         function uploadPreviewAsOutput(pane, media) {
-            let dataUrl = null;
-            try {
-                if (media.type === "splat") {
-                    // Splat screenshots come via postMessage — handled separately
-                    return;
-                } else if (media.type === "video") {
-                    const video = pane.querySelector("video");
-                    if (video && video.readyState >= 2) {
-                        const c = document.createElement("canvas");
-                        c.width = video.videoWidth;
-                        c.height = video.videoHeight;
-                        c.getContext("2d").drawImage(video, 0, 0);
-                        dataUrl = c.toDataURL("image/png");
-                    }
-                } else if (media.type === "image") {
-                    const img = pane.querySelector("img");
-                    if (img && img.complete) {
-                        const c = document.createElement("canvas");
-                        c.width = img.naturalWidth;
-                        c.height = img.naturalHeight;
-                        c.getContext("2d").drawImage(img, 0, 0);
-                        dataUrl = c.toDataURL("image/png");
-                    }
-                }
-            } catch (e) {
-                // Cross-origin or other canvas errors — silently skip
-            }
-            if (dataUrl) sendScreenshot(dataUrl);
+            if (media.type === "splat") return; // handled via postMessage
+            // Fetch the source image/video-frame as blob to avoid canvas taint issues
+            fetch(media.src)
+                .then(r => r.blob())
+                .then(blob => {
+                    const reader = new FileReader();
+                    reader.onload = () => sendScreenshot(reader.result);
+                    reader.readAsDataURL(blob);
+                })
+                .catch(e => console.warn("[Vewd] Preview upload failed:", e));
         }
 
         function sendScreenshot(dataUrl) {
@@ -539,7 +520,14 @@ function createVewdWidget(node) {
         window.addEventListener("message", (event) => {
             if (event.data?.type === "SCREENSHOT" && event.data.image) {
                 sendScreenshot(event.data.image);
-                showToast("Screenshot sent");
+                // Save camera state on the current splat item
+                if (event.data.cameraState && state.focusIndex >= 0) {
+                    const media = state.images[state.focusIndex];
+                    if (media && media.type === "splat") {
+                        if (!media.sourceInfo) media.sourceInfo = {};
+                        media.sourceInfo.cameraState = event.data.cameraState;
+                    }
+                }
             }
         });
 
@@ -566,9 +554,15 @@ function createVewdWidget(node) {
                                     extrinsics: media.sourceInfo?.extrinsics || null,
                                     intrinsics: media.sourceInfo?.intrinsics || null
                                 }, "*");
-                                // Auto-screenshot once loaded for IMAGE output
+                                // Restore saved camera angle, or auto-screenshot
+                                const savedCam = media.sourceInfo?.cameraState;
                                 setTimeout(() => {
-                                    iframe.contentWindow.postMessage({ type: "REQUEST_SCREENSHOT" }, "*");
+                                    if (savedCam) {
+                                        iframe.contentWindow.postMessage({ type: "RESTORE_CAMERA", cameraState: savedCam }, "*");
+                                        setTimeout(() => iframe.contentWindow.postMessage({ type: "REQUEST_SCREENSHOT" }, "*"), 500);
+                                    } else {
+                                        iframe.contentWindow.postMessage({ type: "REQUEST_SCREENSHOT" }, "*");
+                                    }
                                 }, 1500);
                             })
                             .catch(err => console.error("[Vewd] Failed to load splat data:", err));
@@ -689,6 +683,11 @@ function createVewdWidget(node) {
                 state.selected.add(found);
             } else {
                 state.focusIndex = -1;
+                // All visible items deleted but hidden items remain
+                if (state.images.length > 0) {
+                    const hidden = state.images.length;
+                    showToast(`${hidden} hidden item${hidden > 1 ? "s" : ""} remain — use clear to remove all`);
+                }
             }
         } else {
             state.focusIndex = -1;
@@ -1063,13 +1062,11 @@ function createVewdWidget(node) {
         importInput.value = "";
     };
 
-    // Drag-drop on preview area
-    previewArea.addEventListener("dragover", (e) => { e.preventDefault(); previewArea.classList.add("drop-hover"); });
-    previewArea.addEventListener("dragenter", (e) => { e.preventDefault(); previewArea.classList.add("drop-hover"); });
-    previewArea.addEventListener("dragleave", () => { previewArea.classList.remove("drop-hover"); });
-    previewArea.addEventListener("drop", (e) => {
+    // Drag-drop on the whole container (works even when iframe/video/model-viewer captures events)
+    function handleDrop(e) {
         e.preventDefault();
-        previewArea.classList.remove("drop-hover");
+        e.stopPropagation();
+        el.classList.remove("drop-hover");
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             importFiles([...e.dataTransfer.files]);
         } else {
@@ -1082,7 +1079,14 @@ function createVewdWidget(node) {
             }
             if (imgUrl) importFromUrl(imgUrl);
         }
+    }
+    el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("drop-hover"); });
+    el.addEventListener("dragenter", (e) => { e.preventDefault(); el.classList.add("drop-hover"); });
+    el.addEventListener("dragleave", (e) => {
+        // Only remove hover when leaving the container entirely
+        if (!el.contains(e.relatedTarget)) el.classList.remove("drop-hover");
     });
+    el.addEventListener("drop", handleDrop);
 
     return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput, seenImages, restoreState, persistState };
 }
