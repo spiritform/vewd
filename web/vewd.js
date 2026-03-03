@@ -372,13 +372,13 @@ function createVewdWidget(node) {
             </div>
             <span class="count">0</span>
             <button class="lock-btn" title="Lock selection — prevent auto-select on new images"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
-            <button class="import-btn">import</button>
-            <input type="file" class="import-input" multiple accept="image/*,video/*" style="display:none">
             <button class="clear-btn">clear</button>
             <button class="filter-btn">❤</button>
             <span class="tagged-count">0</span>
             <button class="auto-export-btn">auto</button>
             <button class="save-btn">save</button>
+            <button class="import-btn">import</button>
+            <input type="file" class="import-input" multiple accept="image/*,video/*" style="display:none">
             <span style="margin-left:auto;color:#444">spacebar ❤ | s save | esc exit</span>
             <button class="vewd-logo">vewd</button>
         </div>
