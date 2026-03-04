@@ -3,6 +3,9 @@ import { api } from "../../scripts/api.js";
 
 console.log("[Vewd] Extension loaded");
 
+// Cloud detection — cloud hosts won't be localhost/127.0.0.1
+const isCloud = !["127.0.0.1", "localhost"].includes(window.location.hostname);
+
 // Load model-viewer web component for 3D preview
 const mvScript = document.createElement("script");
 mvScript.type = "module";
@@ -328,6 +331,93 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// Client-side waveform colors (matching server-side WAVEFORM_COLORS)
+const WAVEFORM_COLORS = [
+    [70, 130, 200],   // blue
+    [200, 75, 100],   // pink
+    [70, 190, 120],   // green
+    [200, 160, 60],   // gold
+    [140, 90, 200],   // purple
+    [200, 110, 50],   // orange
+    [60, 170, 170],   // cyan
+    [200, 65, 65],    // red
+];
+
+// Simple string hash for deterministic color selection
+function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+// Generate waveform thumbnail client-side via Web Audio API
+// Returns a promise that resolves to a data URL
+async function generateWaveformClient(audioUrl, filename, width = 800, height = 200) {
+    const response = await fetch(audioUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
+
+    const samples = audioBuffer.getChannelData(0); // mono channel
+    const peak = samples.reduce((max, s) => Math.max(max, Math.abs(s)), 0) || 1.0;
+
+    // Downsample to width bins
+    const binSize = Math.max(1, Math.floor(samples.length / width));
+    const bins = Math.floor(samples.length / binSize);
+
+    const maxes = new Float32Array(bins);
+    const mins = new Float32Array(bins);
+    for (let i = 0; i < bins; i++) {
+        let max = -1, min = 1;
+        for (let j = 0; j < binSize; j++) {
+            const s = samples[i * binSize + j] / peak;
+            if (s > max) max = s;
+            if (s < min) min = s;
+        }
+        maxes[i] = max;
+        mins[i] = min;
+    }
+
+    // Pick color based on filename hash
+    const color = WAVEFORM_COLORS[hashString(filename) % WAVEFORM_COLORS.length];
+
+    // Draw on offscreen canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    // Background
+    ctx.fillStyle = "rgb(17, 17, 17)";
+    ctx.fillRect(0, 0, width, height);
+
+    // Waveform bars
+    const mid = height / 2;
+    ctx.strokeStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+    ctx.lineWidth = 1;
+    for (let x = 0; x < Math.min(bins, width); x++) {
+        const yTop = Math.round(mid - maxes[x] * mid * 0.75);
+        const yBot = Math.round(mid - mins[x] * mid * 0.75);
+        ctx.beginPath();
+        ctx.moveTo(x, yTop);
+        ctx.lineTo(x, yBot);
+        ctx.stroke();
+    }
+
+    // Center line
+    ctx.strokeStyle = "rgb(40, 40, 40)";
+    ctx.beginPath();
+    ctx.moveTo(0, mid);
+    ctx.lineTo(width - 1, mid);
+    ctx.stroke();
+
+    return canvas.toDataURL("image/png");
+}
+
 // Widget factory
 function createVewdWidget(node) {
     // Use getter — node.id may not be final at creation time
@@ -430,16 +520,16 @@ function createVewdWidget(node) {
             const vid = item.querySelector("video");
             vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
         } else if (type === "audio") {
-            // Trigger waveform generation + cache via endpoint, show via /view cache URL
+            // Generate waveform client-side via Web Audio API
             item.innerHTML = `<div class="audio-icon">♪</div><audio src="${src}"></audio>`;
-            const wfUrl = `/vewd/waveform?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(sourceInfo?.subfolder || "")}&type=${sourceInfo?.type || "temp"}`;
-            api.fetchApi(wfUrl).then(r => {
-                if (!r.ok) return;
-                // Waveform is now cached — show it via /view
-                const cacheName = filename.split('/').pop().split('\\').pop().replace(/\.[^.]+$/, '') + '_waveform.png';
-                const cachedUrl = api.apiURL(`/view?filename=${encodeURIComponent(cacheName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
-                item.innerHTML = `<img src="${cachedUrl}"><div class="media-icon">♪</div><audio src="${src}"></audio>`;
+            generateWaveformClient(src, filename).then(dataUrl => {
+                item.innerHTML = `<img src="${dataUrl}"><div class="media-icon">♪</div><audio src="${src}"></audio>`;
             }).catch(() => {});
+            // Also trigger server-side cache on local (for persistence across restarts)
+            if (!isCloud) {
+                const wfUrl = `/vewd/waveform?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(sourceInfo?.subfolder || "")}&type=${sourceInfo?.type || "temp"}`;
+                api.fetchApi(wfUrl).catch(() => {});
+            }
         } else if (type === "model") {
             if (thumbnail) {
                 item.innerHTML = `<img src="${thumbnail}"><div class="media-icon">🧊</div>`;
@@ -506,6 +596,7 @@ function createVewdWidget(node) {
     }
 
     function sendVideoInfo(media) {
+        if (isCloud) return;
         const info = {
             node_id: String(getNodeId()),
             filename: media.filename,
@@ -520,6 +611,7 @@ function createVewdWidget(node) {
     }
 
     function clearVideoInfo() {
+        if (isCloud) return;
         api.fetchApi("/vewd/set_video", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -528,6 +620,7 @@ function createVewdWidget(node) {
     }
 
     function sendImageInfo(media) {
+        if (isCloud) return;
         api.fetchApi("/vewd/set_image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -541,6 +634,7 @@ function createVewdWidget(node) {
     }
 
     function clearImageInfo() {
+        if (isCloud) return;
         api.fetchApi("/vewd/set_image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -571,12 +665,10 @@ function createVewdWidget(node) {
                 content = `<video src="${media.src}" controls muted loop playsinline preload="auto"></video>`;
             } else if (media.type === "audio") {
                 const baseName = media.filename.split('/').pop().split('\\').pop();
-                const cacheName = baseName.replace(/\.[^.]+$/, '') + '_waveform.png';
-                const wfCacheUrl = api.apiURL(`/view?filename=${encodeURIComponent(cacheName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
-                const cachedAudioUrl = api.apiURL(`/view?filename=${encodeURIComponent(baseName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
+                const cachedAudioUrl = isCloud ? media.src : api.apiURL(`/view?filename=${encodeURIComponent(baseName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
                 content = `<div class="audio-preview">
                     <div class="waveform-wrap" data-audio-seek>
-                        <img src="${wfCacheUrl}" onerror="this.style.display='none'">
+                        <img src="" style="display:none">
                         <div class="waveform-progress"></div>
                         <div class="waveform-playhead"></div>
                     </div>
@@ -586,6 +678,16 @@ function createVewdWidget(node) {
                     </div>
                     <audio src="${cachedAudioUrl}" preload="auto"></audio>
                 </div>`;
+                // Generate waveform client-side after render
+                setTimeout(() => {
+                    const wfImg = previewArea.querySelector(".waveform-wrap img");
+                    if (wfImg) {
+                        generateWaveformClient(media.src, media.filename).then(dataUrl => {
+                            wfImg.src = dataUrl;
+                            wfImg.style.display = "";
+                        }).catch(() => {});
+                    }
+                }, 0);
             } else if (media.type === "model") {
                 content = `<model-viewer src="${media.src}" camera-controls auto-rotate shadow-intensity="1" style="background-color:#444;width:100%;height:100%"></model-viewer>`;
             } else if (media.type === "splat") {
@@ -598,6 +700,7 @@ function createVewdWidget(node) {
 
         // Upload the currently viewed preview as IMAGE output for downstream nodes
         function uploadPreviewAsOutput(pane, media) {
+            if (isCloud) return; // cloud uses widget passthrough
             if (media.type === "splat") return; // handled via postMessage
             // Fetch the source image/video-frame as blob to avoid canvas taint issues
             fetch(media.src)
@@ -611,6 +714,7 @@ function createVewdWidget(node) {
         }
 
         function sendScreenshot(dataUrl) {
+            if (isCloud) return;
             api.fetchApi("/vewd/screenshot", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -850,6 +954,7 @@ function createVewdWidget(node) {
     }
 
     async function exportSelects() {
+        if (isCloud) return;
         const toExport = state.selected.size > 0
             ? state.images.filter((_, i) => state.selected.has(i))
             : state.filterOn
@@ -892,6 +997,7 @@ function createVewdWidget(node) {
     }
 
     async function saveImages() {
+        if (isCloud) return;
         const toSave = state.selected.size > 0
             ? state.images.filter((_, i) => state.selected.has(i))
             : [];
@@ -932,7 +1038,7 @@ function createVewdWidget(node) {
     }
 
     async function autoExportTagged() {
-        if (!state.autoExport || state.tagged.size === 0) return;
+        if (isCloud || !state.autoExport || state.tagged.size === 0) return;
 
         const toExport = state.images.filter((_, i) => state.tagged.has(i));
         const folder = folderInput.value || "";
@@ -1059,6 +1165,21 @@ function createVewdWidget(node) {
     folderInput.addEventListener("keydown", (e) => e.stopPropagation());
     prefixInput.addEventListener("keydown", (e) => e.stopPropagation());
 
+    // Cloud: hide disk-dependent UI elements
+    if (isCloud) {
+        saveBtn.style.display = "none";
+        autoExportBtn.style.display = "none";
+        importBtn.style.display = "none";
+        importInput.style.display = "none";
+        // Hide folder/prefix inputs and their labels
+        folderInput.style.display = "none";
+        prefixInput.style.display = "none";
+        el.querySelectorAll(".vewd-header label").forEach(l => l.style.display = "none");
+        // Hide keyboard hints that reference save
+        const hintSpan = el.querySelector(".vewd-bar span[style*='margin-left']");
+        if (hintSpan) hintSpan.textContent = "spacebar ❤ | esc exit";
+    }
+
     function persistState() {
         try {
             const data = {
@@ -1145,17 +1266,40 @@ function createVewdWidget(node) {
                     vid.addEventListener("loadeddata", () => { vid.currentTime = 0.1; });
                     vid.addEventListener("error", () => tryFallback(vid, "video"), { once: true });
                 } else if (saved.type === "audio") {
-                    // Use cached waveform + audio from output/vewd-cache/ via /view endpoint
                     const baseName = saved.filename.split('/').pop().split('\\').pop();
-                    const cacheName = baseName.replace(/\.[^.]+$/, '') + '_waveform.png';
-                    const wfSrc = api.apiURL(`/view?filename=${encodeURIComponent(cacheName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
-                    // Try cached audio copy first, fall back to original location
-                    const cachedAudioSrc = api.apiURL(`/view?filename=${encodeURIComponent(baseName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
-                    item.innerHTML = `<img src="${wfSrc}"><div class="media-icon">♪</div><audio src="${cachedAudioSrc}"></audio>`;
-                    item.querySelector("img").addEventListener("error", () => { item.querySelector("img").replaceWith(Object.assign(document.createElement("div"), { className: "audio-icon", textContent: "♪" })); });
+                    // Try cached audio copy first (local), fall back to original location
+                    const cachedAudioSrc = isCloud ? src : api.apiURL(`/view?filename=${encodeURIComponent(baseName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
+                    if (!isCloud) {
+                        // Local: try server-cached waveform first, fall back to client-side
+                        const cacheName = baseName.replace(/\.[^.]+$/, '') + '_waveform.png';
+                        const wfSrc = api.apiURL(`/view?filename=${encodeURIComponent(cacheName)}&subfolder=vewd-cache&type=output&t=${Date.now()}`);
+                        item.innerHTML = `<img src="${wfSrc}"><div class="media-icon">♪</div><audio src="${cachedAudioSrc}"></audio>`;
+                        item.querySelector("img").addEventListener("error", () => {
+                            // Server cache miss — generate client-side
+                            generateWaveformClient(cachedAudioSrc, saved.filename).then(dataUrl => {
+                                item.querySelector("img").src = dataUrl;
+                            }).catch(() => {
+                                item.querySelector("img").replaceWith(Object.assign(document.createElement("div"), { className: "audio-icon", textContent: "♪" }));
+                            });
+                        }, { once: true });
+                    } else {
+                        // Cloud: always client-side waveform
+                        item.innerHTML = `<div class="audio-icon">♪</div><audio src="${cachedAudioSrc}"></audio>`;
+                        generateWaveformClient(src, saved.filename).then(dataUrl => {
+                            const imgEl = document.createElement("img");
+                            imgEl.src = dataUrl;
+                            const iconEl = item.querySelector(".audio-icon");
+                            if (iconEl) iconEl.replaceWith(imgEl);
+                            // Add media icon back
+                            const mediaIcon = document.createElement("div");
+                            mediaIcon.className = "media-icon";
+                            mediaIcon.textContent = "♪";
+                            item.appendChild(mediaIcon);
+                        }).catch(() => {});
+                    }
                     // If cached audio fails, try original location
                     const audioEl = item.querySelector("audio");
-                    audioEl.addEventListener("error", () => { audioEl.src = src; }, { once: true });
+                    if (!isCloud) audioEl.addEventListener("error", () => { audioEl.src = src; }, { once: true });
                 } else if (saved.type === "model") {
                     if (saved.thumbnail) {
                         item.innerHTML = `<img src="${saved.thumbnail}"><div class="media-icon">🧊</div>`;
@@ -1297,11 +1441,27 @@ function createVewdWidget(node) {
     el.addEventListener("drop", handleDrop);
 
     // Sync current selection to backend stores (called before workflow queue)
-    // Uses synchronous XHR to ensure data arrives before process() runs
+    // Sets hidden widget value for cloud-compatible passthrough + HTTP endpoints for local
     function syncToBackend() {
         if (state.focusIndex < 0 || !state.images.length) return;
         const media = state.images[state.focusIndex];
         if (!media) return;
+
+        // Always set the hidden widget (works on both local and cloud)
+        const hiddenWidgets = syncToBackend._hiddenWidgets;
+        if (hiddenWidgets && hiddenWidgets["selected_media"]) {
+            const widgetPayload = JSON.stringify({
+                media_type: media.type,
+                filename: media.filename,
+                subfolder: media.sourceInfo?.subfolder || "",
+                type: media.sourceInfo?.type || "temp",
+            });
+            hiddenWidgets["selected_media"].value = widgetPayload;
+        }
+
+        // On cloud, skip HTTP endpoint calls
+        if (isCloud) return;
+
         let endpoint, payload;
         if (media.type === "video") {
             endpoint = "/vewd/set_video";
@@ -1471,7 +1631,8 @@ app.registerExtension({
             }
 
             // Handle nodes that save audio but don't expose filenames (e.g. ACE-Step outputs audio_codes)
-            if (output?.audio_codes && !audioSources) {
+            // Requires server-side file lookup — only works on local
+            if (!isCloud && output?.audio_codes && !audioSources) {
                 if (lastPromptData && detail?.node) {
                     const nodeData = lastPromptData[String(detail.node)];
                     const prefix = nodeData?.inputs?.filename_prefix;
@@ -1560,12 +1721,15 @@ app.registerExtension({
         if (node.widgets) {
             for (let i = node.widgets.length - 1; i >= 0; i--) {
                 const w = node.widgets[i];
-                if (w.name === "folder" || w.name === "filename_prefix") {
+                if (w.name === "folder" || w.name === "filename_prefix" || w.name === "selected_media") {
                     hiddenWidgets[w.name] = w;
                     node.widgets.splice(i, 1);
                 }
             }
         }
+        // Attach hiddenWidgets to syncToBackend so it can access selected_media
+        widget.syncToBackend._hiddenWidgets = hiddenWidgets;
+
         // Persist folder/prefix via localStorage (keyed per node ID)
         const storageKey = `vewd_${node.id}`;
         const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");

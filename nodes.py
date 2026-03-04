@@ -1,3 +1,4 @@
+import json
 import shutil
 import base64
 import io
@@ -115,6 +116,7 @@ class Vewd:
                 "folder": ("STRING", {"default": "C:/AI/comfy/ComfyUI/output/vewd"}),
                 "filename_prefix": ("STRING", {"default": "vewd"}),
                 "max_frames": ("INT", {"default": 0, "min": 0, "max": 9999, "step": 1, "tooltip": "Max video frames to extract (0 = all)"}),
+                "selected_media": ("STRING", {"default": ""}),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -132,16 +134,49 @@ class Vewd:
     def IS_CHANGED(cls, **kwargs):
         return float("NaN")
 
-    def process(self, input=None, folder="", filename_prefix="vewd", max_frames=0, prompt=None, extra_pnginfo=None, unique_id=None):
+    def process(self, input=None, folder="", filename_prefix="vewd", max_frames=0, selected_media="", prompt=None, extra_pnginfo=None, unique_id=None):
         folder = folder.strip('"')
         result = {"ui": {"vewd_images": []}}
         img_tensor = None
         node_key = str(unique_id) if unique_id else None
 
-        # Priority: wired input > video store > image store > screenshot store > black fallback
+        # Priority: wired input > selected_media widget > video store > image store > screenshot store > black fallback
         if input is not None:
             img_tensor = input
-        elif node_key and node_key in _video_store and HAS_CV2:
+
+        # Parse selected_media widget (cloud-compatible passthrough)
+        if img_tensor is None and selected_media:
+            try:
+                media_info = json.loads(selected_media)
+                media_type = media_info.get("media_type", "")
+                filename = media_info.get("filename", "")
+                subfolder = media_info.get("subfolder", "")
+                source_type = media_info.get("type", "temp")
+
+                if filename:
+                    type_dirs = {
+                        "temp": folder_paths.get_temp_directory(),
+                        "output": folder_paths.get_output_directory(),
+                        "input": folder_paths.get_input_directory(),
+                    }
+                    base_dir = type_dirs.get(source_type, folder_paths.get_temp_directory())
+                    file_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
+
+                    if file_path.exists():
+                        if media_type == "video" and HAS_CV2:
+                            img_tensor = extract_video_frames(file_path, max_frames)
+                            print(f"[Vewd] Widget: extracted {img_tensor.shape[0]} frames from {file_path.name}")
+                        elif media_type == "image" or file_path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'):
+                            img = Image.open(file_path).convert("RGB")
+                            img_array = np.array(img).astype(np.float32) / 255.0
+                            img_tensor = torch.from_numpy(img_array).unsqueeze(0)
+                            print(f"[Vewd] Widget: loaded image {file_path.name} ({img.size[0]}x{img.size[1]})")
+                    else:
+                        print(f"[Vewd] Widget: file not found: {file_path}")
+            except Exception as e:
+                print(f"[Vewd] Widget: selected_media parse failed: {e}")
+
+        if img_tensor is None and node_key and node_key in _video_store and HAS_CV2:
             video_info = _video_store[node_key]
             try:
                 # Resolve video file path
