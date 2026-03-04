@@ -1199,21 +1199,6 @@ function createVewdWidget(node) {
     folderInput.addEventListener("keydown", (e) => e.stopPropagation());
     prefixInput.addEventListener("keydown", (e) => e.stopPropagation());
 
-    // Cloud: hide disk-dependent UI elements
-    if (isCloud) {
-        saveBtn.style.display = "none";
-        autoExportBtn.style.display = "none";
-        importBtn.style.display = "none";
-        importInput.style.display = "none";
-        // Hide folder/prefix inputs and their labels
-        folderInput.style.display = "none";
-        prefixInput.style.display = "none";
-        el.querySelectorAll(".vewd-header label").forEach(l => l.style.display = "none");
-        // Hide keyboard hints that reference save
-        const hintSpan = el.querySelector(".vewd-bar span[style*='margin-left']");
-        if (hintSpan) hintSpan.textContent = "spacebar ❤ | esc exit";
-    }
-
     function persistState() {
         try {
             const data = {
@@ -1514,6 +1499,19 @@ function createVewdWidget(node) {
         } catch (e) {
             console.warn("[Vewd] syncToBackend failed:", e);
         }
+    }
+
+    // Cloud: hide disk-dependent UI elements
+    if (isCloud) {
+        saveBtn.style.display = "none";
+        autoExportBtn.style.display = "none";
+        importBtn.style.display = "none";
+        importInput.style.display = "none";
+        folderInput.style.display = "none";
+        prefixInput.style.display = "none";
+        el.querySelectorAll(".vewd-header label").forEach(l => l.style.display = "none");
+        const hintSpan = el.querySelector(".vewd-bar span[style*='margin-left']");
+        if (hintSpan) hintSpan.textContent = "spacebar ❤ | esc exit";
     }
 
     return { el, addImage, addMedia, state, autoExportTagged, folderInput, prefixInput, seenImages, restoreState, persistState, syncToBackend };
