@@ -467,6 +467,7 @@ function createVewdWidget(node) {
             <span class="tagged-count">0</span>
             <button class="auto-export-btn">auto</button>
             <button class="save-btn">save</button>
+            <button class="download-btn">download</button>
             <button class="import-btn">import</button>
             <input type="file" class="import-input" multiple accept="image/*,video/*" style="display:none">
             <span style="margin-left:auto;color:#444">spacebar ❤ | s save | esc exit</span>
@@ -481,6 +482,7 @@ function createVewdWidget(node) {
     const filterBtn = el.querySelector(".filter-btn");
     const clearBtn = el.querySelector(".clear-btn");
     const saveBtn = el.querySelector(".save-btn");
+    const downloadBtn = el.querySelector(".download-btn");
     const autoExportBtn = el.querySelector(".auto-export-btn");
     const lockBtn = el.querySelector(".lock-btn");
     const fullscreenBtn = el.querySelector(".fullscreen-btn");
@@ -1037,6 +1039,37 @@ function createVewdWidget(node) {
         }
     }
 
+    async function downloadSelected() {
+        const toDownload = state.selected.size > 0
+            ? state.images.filter((_, i) => state.selected.has(i))
+            : [];
+        if (toDownload.length === 0) {
+            showToast("No items selected");
+            return;
+        }
+        for (const media of toDownload) {
+            try {
+                const res = await fetch(media.src);
+                const blob = await res.blob();
+                const ext = media.filename.slice(media.filename.lastIndexOf(".")) || ".png";
+                const name = media.sourceInfo?.seed
+                    ? `vewd_${media.sourceInfo.seed}${ext}`
+                    : media.filename.split("/").pop().split("\\").pop();
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            } catch (e) {
+                console.warn("[Vewd] Download failed:", media.filename, e);
+            }
+        }
+        showToast(`Downloaded ${toDownload.length}`);
+        flashBtn(downloadBtn);
+    }
+
     async function autoExportTagged() {
         if (isCloud || !state.autoExport || state.tagged.size === 0) return;
 
@@ -1157,6 +1190,7 @@ function createVewdWidget(node) {
         persistState();
     };
     saveBtn.onclick = saveImages;
+    downloadBtn.onclick = downloadSelected;
     autoExportBtn.onclick = () => { state.autoExport = !state.autoExport; update(); };
     lockBtn.onclick = () => { state.locked = !state.locked; update(); };
     fullscreenBtn.onclick = toggleFullscreen;
