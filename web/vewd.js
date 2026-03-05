@@ -33,12 +33,12 @@ style.textContent = `
         border-bottom: 1px solid #222;
         align-items: center;
         font-size: 13px;
-        color: #555;
+        color: #888;
     }
     .vewd-header input {
         background: #252525;
         border: none;
-        color: #777;
+        color: #999;
         padding: 4px 8px;
         border-radius: 3px;
         font-size: 12px;
@@ -49,8 +49,8 @@ style.textContent = `
     .vewd-header .folder-input { width: 400px; }
     .vewd-header .prefix-input { width: 120px; }
     .vewd-header input:focus { color: #ccc; outline: none; }
-    .vewd-header label { color: #555; font-size: 12px; white-space: nowrap; }
-    .vewd-header .filename-display { color: #555; font-size: 11px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+    .vewd-header label { color: #888; font-size: 12px; white-space: nowrap; }
+    .vewd-header .filename-display { color: #888; font-size: 11px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
 
     .vewd-main {
         flex: 1;
@@ -247,13 +247,13 @@ style.textContent = `
     .vewd-filters button {
         background: transparent;
         border: 1px solid #333;
-        color: #555;
+        color: #888;
         padding: 4px 12px;
         border-radius: 3px;
         cursor: pointer;
         font-size: 12px;
     }
-    .vewd-filters button:hover { border-color: #555; color: #888; }
+    .vewd-filters button:hover { border-color: #555; color: #aaa; }
     .vewd-filters button.active { border-color: #fff; color: #fff; }
 
     .vewd-bar {
@@ -262,7 +262,7 @@ style.textContent = `
         padding: 10px;
         background: #1a1a1a;
         font-size: 14px;
-        color: #555;
+        color: #888;
         align-items: center;
         flex-wrap: wrap;
     }
@@ -275,14 +275,14 @@ style.textContent = `
     .vewd-bar button {
         background: #252525;
         border: none;
-        color: #777;
+        color: #999;
         padding: 5px 14px;
         border-radius: 3px;
         cursor: pointer;
         font-size: 13px;
         line-height: 1.3;
     }
-    .vewd-bar button:hover { background: #333; color: #aaa; }
+    .vewd-bar button:hover { background: #333; color: #ccc; }
     .vewd-bar button.on { background: #fff; color: #111; }
     .vewd-bar .save-btn { background: #333; color: #aaa; }
     .vewd-bar .save-btn:hover { background: #444; color: #ccc; }
@@ -466,11 +466,11 @@ function createVewdWidget(node) {
             <button class="filter-btn">❤</button>
             <span class="tagged-count">0</span>
             <button class="auto-export-btn">auto</button>
-            <button class="save-btn">save</button>
             <button class="download-btn">download</button>
+            <button class="save-btn">export</button>
             <button class="import-btn">import</button>
             <input type="file" class="import-input" multiple accept="image/*,video/*" style="display:none">
-            <span style="margin-left:auto;color:#444">spacebar ❤ | s save | esc exit</span>
+            <span style="margin-left:auto"></span>
             <button class="vewd-logo">vewd</button>
         </div>
     `;
