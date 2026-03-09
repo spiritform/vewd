@@ -1707,11 +1707,21 @@ app.registerExtension({
             }
 
             // Handle 3D models / meshes
-            const meshSources = output?.mesh || output?.model_file;
-            if (meshSources) {
-                const meshList = Array.isArray(meshSources) ? meshSources : [meshSources];
-                meshList.forEach(m => addOutput(m, "model"));
-            }
+            // Check multiple keys: mesh, model_file, GLB, OBJ (Hunyuan3D API nodes use uppercase keys)
+            const meshKeys = ["mesh", "model_file", "GLB", "OBJ", "3d"];
+            meshKeys.forEach(mk => {
+                if (!output?.[mk]) return;
+                const meshList = Array.isArray(output[mk]) ? output[mk] : [output[mk]];
+                meshList.forEach(m => {
+                    // Normalize: some nodes return strings instead of {filename, subfolder, type}
+                    if (typeof m === "string" && m.length > 0) {
+                        const filename = m.includes("/") ? m.split("/").pop() : m.includes("\\") ? m.split("\\").pop() : m;
+                        const subfolder = m.includes("/") ? m.slice(0, m.lastIndexOf("/")) : "";
+                        m = { filename, subfolder, type: "output" };
+                    }
+                    if (m && m.filename) addOutput(m, "model");
+                });
+            });
 
             // Handle "result" key (Preview 3D & Animation node sends ["filename.glb", camera_info, bg_image])
             const allMeshExts = [...modelExts, ...splatExts];
@@ -1751,7 +1761,7 @@ app.registerExtension({
             }
 
             // Debug: log unknown output types to console
-            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "audio_codes", "text", "mesh", "model_file", "result", "vewd_images", "ply_file", "filename", "file_size_mb", "extrinsics", "intrinsics"]);
+            const knownKeys = new Set(["images", "gifs", "videos", "video", "audio", "audios", "audio_file", "audio_codes", "text", "mesh", "model_file", "GLB", "OBJ", "3d", "result", "vewd_images", "ply_file", "filename", "file_size_mb", "extrinsics", "intrinsics"]);
             Object.keys(output || {}).forEach(key => {
                 if (!knownKeys.has(key)) {
                     console.log("[Vewd] Unknown output key:", key, output[key]);
