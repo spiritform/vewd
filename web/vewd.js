@@ -545,7 +545,8 @@ function createVewdWidget(node) {
                 item.innerHTML = `<div class="splat-icon">💠</div>`;
             }
         } else {
-            item.innerHTML = `<img src="${src}">`;
+            const isGif = filename.toLowerCase().endsWith(".gif");
+            item.innerHTML = `<img src="${src}">${isGif ? '<div class="media-icon">▶</div>' : ''}`;
         }
 
         item.ondblclick = (e) => { e.stopPropagation(); toggleFullscreen(); };
@@ -1332,7 +1333,8 @@ function createVewdWidget(node) {
                         item.innerHTML = `<div class="splat-icon">💠</div>`;
                     }
                 } else {
-                    item.innerHTML = `<img src="${src}">`;
+                    const isGif = saved.filename.toLowerCase().endsWith(".gif");
+                    item.innerHTML = `<img src="${src}">${isGif ? '<div class="media-icon">▶</div>' : ''}`;
                     const img = item.querySelector("img");
                     if (img) img.addEventListener("error", () => tryFallback(img, "img"), { once: true });
                 }
@@ -1466,38 +1468,56 @@ function createVewdWidget(node) {
         const media = state.images[state.focusIndex];
         if (!media) return;
 
-        // Always set the hidden widget (works on both local and cloud)
+        const sel = [...state.selected].sort((a, b) => a - b);
+        const items = sel.map(i => state.images[i]).filter(Boolean);
+
+        // Send batch selection via HTTP (works on local, synchronous to beat process())
+        if (!isCloud) {
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", "/vewd/set_batch", false);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.send(JSON.stringify({
+                    node_id: String(getNodeId()),
+                    items: items.map(m => ({
+                        media_type: m.type,
+                        filename: m.filename,
+                        subfolder: m.sourceInfo?.subfolder || "",
+                        type: m.sourceInfo?.type || "temp",
+                    }))
+                }));
+                console.log(`[Vewd] syncToBackend: ${items.length} items sent via batch endpoint`);
+            } catch (e) {
+                console.warn("[Vewd] syncToBackend failed:", e);
+            }
+
+            // Also set single-item endpoints for backward compat
+            if (media.type === "video") {
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/vewd/set_video", false);
+                    xhr.setRequestHeader("Content-Type", "application/json");
+                    xhr.send(JSON.stringify({ node_id: String(getNodeId()), filename: media.filename, subfolder: media.sourceInfo?.subfolder || "", type: media.sourceInfo?.type || "temp" }));
+                } catch (e) {}
+            } else if (media.type === "image") {
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/vewd/set_image", false);
+                    xhr.setRequestHeader("Content-Type", "application/json");
+                    xhr.send(JSON.stringify({ node_id: String(getNodeId()), filename: media.filename, subfolder: media.sourceInfo?.subfolder || "", type: media.sourceInfo?.type || "temp" }));
+                } catch (e) {}
+            }
+        }
+
+        // Also set hidden widget for cloud passthrough
         const hiddenWidgets = syncToBackend._hiddenWidgets;
         if (hiddenWidgets && hiddenWidgets["selected_media"]) {
-            const widgetPayload = JSON.stringify({
-                media_type: media.type,
-                filename: media.filename,
-                subfolder: media.sourceInfo?.subfolder || "",
-                type: media.sourceInfo?.type || "temp",
-            });
-            hiddenWidgets["selected_media"].value = widgetPayload;
-        }
-
-        // On cloud, skip HTTP endpoint calls
-        if (isCloud) return;
-
-        let endpoint, payload;
-        if (media.type === "video") {
-            endpoint = "/vewd/set_video";
-            payload = { node_id: String(getNodeId()), filename: media.filename, subfolder: media.sourceInfo?.subfolder || "", type: media.sourceInfo?.type || "temp" };
-        } else if (media.type === "image") {
-            endpoint = "/vewd/set_image";
-            payload = { node_id: String(getNodeId()), filename: media.filename, subfolder: media.sourceInfo?.subfolder || "", type: media.sourceInfo?.type || "temp" };
-        } else {
-            return;
-        }
-        try {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", endpoint, false); // synchronous
-            xhr.setRequestHeader("Content-Type", "application/json");
-            xhr.send(JSON.stringify(payload));
-        } catch (e) {
-            console.warn("[Vewd] syncToBackend failed:", e);
+            hiddenWidgets["selected_media"].value = JSON.stringify(items.map(m => ({
+                media_type: m.type,
+                filename: m.filename,
+                subfolder: m.sourceInfo?.subfolder || "",
+                type: m.sourceInfo?.type || "temp",
+            })));
         }
     }
 
@@ -1524,6 +1544,11 @@ let globalVewdWidget = null;
 app.registerExtension({
     name: "vewd",
 
+    // Sync widget values BEFORE ComfyUI serializes the prompt
+    async beforeQueuePrompt() {
+        if (globalVewdWidget) globalVewdWidget.syncToBackend();
+    },
+
     async setup() {
         let lastSeed = null;
         let lastPromptData = null;
@@ -1536,7 +1561,7 @@ app.registerExtension({
                     const body = JSON.parse(options.body);
                     if (body.prompt) lastPromptData = body.prompt;
                 } catch (e) {}
-                // Sync current image/video info to backend before workflow runs
+                // Sync HTTP endpoints (local only — widget already set above)
                 if (globalVewdWidget) globalVewdWidget.syncToBackend();
             }
             return origFetchApi(url, options, ...rest);
@@ -1641,9 +1666,12 @@ app.registerExtension({
                 output.images.forEach(img => addOutput(img, "image"));
             }
 
-            // Handle GIFs (VHS nodes)
+            // Handle GIFs (VHS nodes / Video Combine) — display as images so browsers loop them natively
             if (output?.gifs) {
-                output.gifs.forEach(gif => addOutput(gif, "video"));
+                output.gifs.forEach(gif => {
+                    const ext = gif.filename?.slice(gif.filename.lastIndexOf(".")).toLowerCase();
+                    addOutput(gif, ext === ".gif" ? "image" : "video");
+                });
             }
 
             // Handle videos (plural and singular)

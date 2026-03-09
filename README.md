@@ -88,6 +88,15 @@ Point it at any folder of images, videos, or audio. Opens a browser-based viewer
 
 ## What's New
 
+### v1.8.0 — Cloud Compatibility & Batch Output
+
+- **Cloud support** — Auto-detects cloud vs local at runtime. One version works everywhere
+- **Batch IMAGE output** — Select multiple images (Ctrl/Shift+click), queue workflow, all selected frames output as a batch tensor. Wire to Video Combine for GIF/MP4 compilation
+- **Browser download** — New download button for saving media via browser dialog (works on both local and cloud)
+- **Client-side waveforms** — Audio waveform thumbnails now generated via Web Audio API instead of server-side ffmpeg
+- **GIF display** — Animated GIFs display as native `<img>` tags (auto-loop) with play icon badge
+- **UI refresh** — Brighter text, renamed save to export, cleaner bottom bar
+
 ### v1.5.0 — Audio Player & Waveforms
 
 - **Waveform thumbnails** — Audio files show colored waveform in the grid instead of a plain icon

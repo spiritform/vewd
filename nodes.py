@@ -27,6 +27,9 @@ _video_store = {}
 # Store active image file info per node for direct-from-disk loading
 _image_store = {}
 
+# Store batch of selected media items per node for multi-frame output
+_batch_store = {}
+
 
 def extract_video_frames(video_path, max_frames=0):
     """Read all frames from a video file and return as (N, H, W, 3) float32 tensor."""
@@ -145,36 +148,97 @@ class Vewd:
             img_tensor = input
 
         # Parse selected_media widget (cloud-compatible passthrough)
+        # Supports array of items (multi-select → batch tensor) or single object (legacy)
         if img_tensor is None and selected_media:
             try:
-                media_info = json.loads(selected_media)
-                media_type = media_info.get("media_type", "")
-                filename = media_info.get("filename", "")
-                subfolder = media_info.get("subfolder", "")
-                source_type = media_info.get("type", "temp")
+                parsed = json.loads(selected_media)
+                # Normalize to list
+                media_list = parsed if isinstance(parsed, list) else [parsed]
 
-                if filename:
-                    type_dirs = {
-                        "temp": folder_paths.get_temp_directory(),
-                        "output": folder_paths.get_output_directory(),
-                        "input": folder_paths.get_input_directory(),
-                    }
+                type_dirs = {
+                    "temp": folder_paths.get_temp_directory(),
+                    "output": folder_paths.get_output_directory(),
+                    "input": folder_paths.get_input_directory(),
+                }
+
+                loaded_tensors = []
+                target_size = None
+
+                for media_info in media_list:
+                    media_type = media_info.get("media_type", "")
+                    filename = media_info.get("filename", "")
+                    subfolder = media_info.get("subfolder", "")
+                    source_type = media_info.get("type", "temp")
+
+                    if not filename:
+                        continue
+
                     base_dir = type_dirs.get(source_type, folder_paths.get_temp_directory())
                     file_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
 
-                    if file_path.exists():
-                        if media_type == "video" and HAS_CV2:
-                            img_tensor = extract_video_frames(file_path, max_frames)
-                            print(f"[Vewd] Widget: extracted {img_tensor.shape[0]} frames from {file_path.name}")
-                        elif media_type == "image" or file_path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'):
-                            img = Image.open(file_path).convert("RGB")
-                            img_array = np.array(img).astype(np.float32) / 255.0
-                            img_tensor = torch.from_numpy(img_array).unsqueeze(0)
-                            print(f"[Vewd] Widget: loaded image {file_path.name} ({img.size[0]}x{img.size[1]})")
-                    else:
+                    if not file_path.exists():
                         print(f"[Vewd] Widget: file not found: {file_path}")
+                        continue
+
+                    if media_type == "video" and HAS_CV2:
+                        frames = extract_video_frames(file_path, max_frames)
+                        print(f"[Vewd] Widget: extracted {frames.shape[0]} frames from {file_path.name}")
+                        loaded_tensors.append(frames)
+                    elif media_type == "image" or file_path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'):
+                        img = Image.open(file_path).convert("RGB")
+                        # Resize to match first image (batch tensors must be same size)
+                        if target_size is None:
+                            target_size = img.size
+                        elif img.size != target_size:
+                            img = img.resize(target_size, Image.LANCZOS)
+                        img_array = np.array(img).astype(np.float32) / 255.0
+                        loaded_tensors.append(torch.from_numpy(img_array).unsqueeze(0))
+
+                if loaded_tensors:
+                    img_tensor = torch.cat(loaded_tensors, dim=0)
+                    print(f"[Vewd] Widget: batch of {img_tensor.shape[0]} frames ({img_tensor.shape[2]}x{img_tensor.shape[1]})")
+
             except Exception as e:
                 print(f"[Vewd] Widget: selected_media parse failed: {e}")
+
+        # Batch store — multiple selected items via HTTP endpoint
+        if img_tensor is None and node_key and node_key in _batch_store:
+            batch_items = _batch_store[node_key]
+            type_dirs = {
+                "temp": folder_paths.get_temp_directory(),
+                "output": folder_paths.get_output_directory(),
+                "input": folder_paths.get_input_directory(),
+            }
+            loaded_tensors = []
+            target_size = None
+            for item in batch_items:
+                media_type = item.get("media_type", "")
+                filename = item.get("filename", "")
+                subfolder = item.get("subfolder", "")
+                source_type = item.get("type", "temp")
+                if not filename:
+                    continue
+                base_dir = type_dirs.get(source_type, folder_paths.get_temp_directory())
+                file_path = Path(base_dir) / subfolder / filename if subfolder else Path(base_dir) / filename
+                if not file_path.exists():
+                    print(f"[Vewd] Batch: file not found: {file_path}")
+                    continue
+                if media_type == "video" and HAS_CV2:
+                    frames = extract_video_frames(file_path, max_frames)
+                    loaded_tensors.append(frames)
+                elif media_type == "image" or file_path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'):
+                    img = Image.open(file_path).convert("RGB")
+                    if target_size is None:
+                        target_size = img.size
+                    elif img.size != target_size:
+                        img = img.resize(target_size, Image.LANCZOS)
+                    img_array = np.array(img).astype(np.float32) / 255.0
+                    loaded_tensors.append(torch.from_numpy(img_array).unsqueeze(0))
+            if loaded_tensors:
+                img_tensor = torch.cat(loaded_tensors, dim=0)
+                print(f"[Vewd] Batch: {img_tensor.shape[0]} frames ({img_tensor.shape[2]}x{img_tensor.shape[1]})")
+            # Clear batch after use so single-select works next time
+            del _batch_store[node_key]
 
         if img_tensor is None and node_key and node_key in _video_store and HAS_CV2:
             video_info = _video_store[node_key]
@@ -410,6 +474,27 @@ async def upload_screenshot(request):
         _video_store.pop(node_id, None)
 
         return web.json_response({"success": True})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)})
+
+
+# Batch selection endpoint — stores multiple selected media items for batch output
+@PromptServer.instance.routes.post("/vewd/set_batch")
+async def set_batch(request):
+    try:
+        data = await request.json()
+        node_id = str(data.get("node_id", ""))
+        items = data.get("items", [])
+
+        if not node_id:
+            return web.json_response({"success": False, "error": "Missing node_id"})
+
+        if not items:
+            _batch_store.pop(node_id, None)
+            return web.json_response({"success": True, "cleared": True})
+
+        _batch_store[node_id] = items
+        return web.json_response({"success": True, "count": len(items)})
     except Exception as e:
         return web.json_response({"success": False, "error": str(e)})
 
