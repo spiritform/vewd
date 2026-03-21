@@ -1436,10 +1436,16 @@ function createVewdWidget(node) {
     };
 
     // Drag-drop on the whole container (works even when iframe/video/model-viewer captures events)
+    // Track internal drags to ignore drops of preview images back onto the container
+    let internalDrag = false;
+    el.addEventListener("dragstart", () => { internalDrag = true; });
+    el.addEventListener("dragend", () => { internalDrag = false; });
+
     function handleDrop(e) {
         e.preventDefault();
         e.stopPropagation();
         el.classList.remove("drop-hover");
+        if (internalDrag) { internalDrag = false; return; }
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             importFiles([...e.dataTransfer.files]);
         } else {
@@ -1453,8 +1459,8 @@ function createVewdWidget(node) {
             if (imgUrl) importFromUrl(imgUrl);
         }
     }
-    el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("drop-hover"); });
-    el.addEventListener("dragenter", (e) => { e.preventDefault(); el.classList.add("drop-hover"); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); if (!internalDrag) el.classList.add("drop-hover"); });
+    el.addEventListener("dragenter", (e) => { e.preventDefault(); if (!internalDrag) el.classList.add("drop-hover"); });
     el.addEventListener("dragleave", (e) => {
         // Only remove hover when leaving the container entirely
         if (!el.contains(e.relatedTarget)) el.classList.remove("drop-hover");
