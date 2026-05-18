@@ -22,6 +22,15 @@ style.textContent = `
         display: flex;
         flex-direction: column;
         height: 100%;
+        /* aspect-ratio only kicks in when at least one axis is auto.
+           Litegraph mounts the element with h-full inside a fixed-px
+           wrapper, so height: 100% resolves to a definite px and
+           aspect-ratio is ignored — original behavior preserved.
+           Vue Node 2.0 mounts into a CSS grid auto-row with no definite
+           parent height, so height: 100% degrades to auto and aspect-ratio
+           derives height from width, locking the container against
+           content-driven growth. */
+        aspect-ratio: 11 / 6;
         outline: none;
     }
 
