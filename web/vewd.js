@@ -1398,7 +1398,7 @@ function createVewdWidget(node) {
                 const form = new FormData();
                 form.append("image", file);
                 form.append("type", "input");
-                const res = await fetch("/upload/image", { method: "POST", body: form });
+                const res = await api.fetchApi("/upload/image", { method: "POST", body: form });
                 const data = await res.json();
                 const filename = data.name;
                 const subfolder = data.subfolder || "";
@@ -1531,8 +1531,6 @@ function createVewdWidget(node) {
     if (isCloud) {
         saveBtn.style.display = "none";
         autoExportBtn.style.display = "none";
-        importBtn.style.display = "none";
-        importInput.style.display = "none";
         folderInput.style.display = "none";
         prefixInput.style.display = "none";
         el.querySelectorAll(".vewd-header label").forEach(l => l.style.display = "none");
